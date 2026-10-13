@@ -505,12 +505,12 @@ const MAP_STORAGE_KEY = "yt_lks_map_graph_data";
 // Initial preset nodes & edges
 const DEFAULT_MAP_DATA = {
   nodes: [
-    { id: "A", name: "Hub Jakarta (A)", x: 220, y: 160 },
-    { id: "B", name: "Depok Hub (B)", x: 280, y: 340 },
-    { id: "C", name: "Bekasi Logistics (C)", x: 500, y: 190 },
-    { id: "D", name: "Bogor Point (D)", x: 340, y: 520 },
-    { id: "E", name: "Cikarang Dry Port (E)", x: 680, y: 260 },
-    { id: "F", name: "Bandung Distribution (F)", x: 860, y: 480 }
+    { id: "A", name: "Hub Node A (Placeholder)", x: 220, y: 160 },
+    { id: "B", name: "Hub Node B (Placeholder)", x: 280, y: 340 },
+    { id: "C", name: "Hub Node C (Placeholder)", x: 500, y: 190 },
+    { id: "D", name: "Hub Node D (Placeholder)", x: 340, y: 520 },
+    { id: "E", name: "Hub Node E (Placeholder)", x: 680, y: 260 },
+    { id: "F", name: "Hub Node F (Placeholder)", x: 860, y: 480 }
   ],
   edges: [
     { from: "A", to: "B", distanceKm: 35, durationMin: 45, costRp: 45000 },

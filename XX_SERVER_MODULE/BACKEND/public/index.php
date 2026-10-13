@@ -85,13 +85,13 @@ try {
         // Seeders
         $passHash = password_hash('password123', PASSWORD_BCRYPT);
         $pdo->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)")->execute([
-            'Administrator LKS', 'admin@juantidur.id', $passHash, 'admin'
+            'Admin Placeholder', 'admin@placeholder.test', $passHash, 'admin'
         ]);
         $pdo->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)")->execute([
-            'Driver Logistik', 'driver@juantidur.id', $passHash, 'driver'
+            'Driver Placeholder', 'driver@placeholder.test', $passHash, 'driver'
         ]);
         $pdo->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)")->execute([
-            'Customer VIP', 'customer@juantidur.id', $passHash, 'customer'
+            'Customer Placeholder', 'customer@placeholder.test', $passHash, 'customer'
         ]);
 
         // Seed Routes
