@@ -94,22 +94,27 @@
           </div>
         </div>
       </div>
-      <div class="dropdown-wrap">
-        <button class="profile-btn" id="profile-btn">
-          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop" alt="Placeholder User">
+      <div class="dropdown-wrap" id="header-user-wrapper">
+        <button class="profile-btn" id="profile-btn" aria-label="Akun Pengguna">
+          <img id="header-user-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop" alt="User Avatar">
         </button>
         <div class="dropdown profile-menu" id="profile-dropdown">
           <div class="profile-header">
-            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop" class="avatar-md" alt="Placeholder User">
+            <img id="menu-user-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop" class="avatar-md" alt="User Avatar">
             <div>
-              <strong>User Placeholder</strong>
-              <small>@user_placeholder</small>
+              <strong id="menu-user-name">Tamu (Belum Login)</strong>
+              <small id="menu-user-email">guest@placeholder.test</small>
             </div>
           </div>
           <hr>
-          <a href="#" class="menu-link">Google Akun</a>
-          <a href="#" class="menu-link">Setelan</a>
-          <a href="#" class="menu-link">Logout</a>
+          <div class="profile-auth-status" id="menu-auth-badge">
+            <span class="badge badge-neutral">Role: Guest</span>
+          </div>
+          <hr>
+          <a href="#" class="menu-link" id="menu-btn-my-orders">📦 Pesanan Dispatch Saya</a>
+          <a href="#" class="menu-link" id="menu-btn-open-map">🗺️ Peta Navigasi & Rute</a>
+          <hr>
+          <button type="button" class="menu-link-btn" id="menu-btn-auth-action">Login Akun</button>
         </div>
       </div>
     </div>
@@ -122,15 +127,15 @@
       <nav class="nav-section">
         <a href="#" class="nav-link active" data-tab="home" data-category="Semua">
           <svg class="icon"><use href="#icon-home"/></svg>
-          <span>Beranda</span>
+          <span>Beranda Video</span>
         </a>
         <a href="#" class="nav-link" data-tab="map" id="nav-link-map">
           <svg class="icon"><use href="#icon-map"/></svg>
-          <span>Peta & Pathfinding</span>
+          <span>Peta Logistik & Navigasi</span>
         </a>
         <a href="#" class="nav-link" data-tab="orders" id="nav-link-orders">
           <svg class="icon"><use href="#icon-order"/></svg>
-          <span>Dispatch & Orders</span>
+          <span>Layanan Pengiriman & Dispatch</span>
         </a>
         <a href="#" class="nav-link" data-category="Shorts">
           <svg class="icon"><use href="#icon-shorts"/></svg>
@@ -199,13 +204,13 @@
         </div>
       </section>
 
-      <!-- VIEW 2: MODUL A - INTERACTIVE SVG MAP & PATHFINDING GEOMETRY -->
+      <!-- VIEW 2: INTERACTIVE SVG MAP & PATHFINDING GEOMETRY -->
       <section id="view-map" class="spa-view">
         <div class="map-module-container">
           <!-- Top Tool Panel -->
           <div class="map-toolbar">
             <div class="toolbar-group">
-              <span class="tool-title">Modul A: Dynamic SVG Map & Dijkstra Pathfinding</span>
+              <span class="tool-title">Navigasi Peta Rute & Titik Distribusi (SVG)</span>
               <span class="pill-badge" id="map-mode-indicator">Mode: Pan & View</span>
             </div>
             <div class="toolbar-actions">
@@ -325,13 +330,13 @@
         </div>
       </section>
 
-      <!-- VIEW 3: MODUL B - FRONTEND SPA & DISPATCH ORDERS WITH SANCTUM AUTH -->
+      <!-- VIEW 3: DISPATCH ORDERS WITH SANCTUM AUTH -->
       <section id="view-orders" class="spa-view">
         <div class="spa-module-container">
           <div class="spa-header-bar">
             <div>
-              <h2>Modul B: Server-Side RESTful API & Single Page Application (SPA)</h2>
-              <p>Autentikasi Bearer Token Laravel Sanctum, kalkulasi angsuran real-time & order dispatching.</p>
+              <h2>Layanan Pengiriman Logistik & Pelacakan Order</h2>
+              <p>Sistem terintegrasi dengan backend API & kalkulasi angsuran biaya muatan.</p>
             </div>
             <div id="auth-user-bar" class="auth-user-bar">
               <!-- Rendered via JS based on token state -->
@@ -473,6 +478,36 @@
           <p class="stats" id="modal-stats"></p>
           <p id="modal-desc"></p>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Universal Sanctum Auth Login Modal -->
+  <div class="modal" id="login-modal">
+    <div class="modal-backdrop" id="login-modal-backdrop"></div>
+    <div class="modal-box login-modal-box">
+      <button class="modal-close" id="login-modal-close">&times;</button>
+      <div class="auth-card modal-auth-card">
+        <h3>Masuk Akun Pengguna (Sanctum Auth)</h3>
+        <p>Gunakan akun placeholder pengujian untuk mengakses fitur dispatch dan sinkronisasi rute.</p>
+        <form id="form-login-modal" class="login-form">
+          <div class="form-group-map">
+            <label for="modal-login-email">Email:</label>
+            <input type="email" id="modal-login-email" class="form-input-map" value="admin@placeholder.test" required>
+          </div>
+          <div class="form-group-map">
+            <label for="modal-login-pass">Password:</label>
+            <input type="password" id="modal-login-pass" class="form-input-map" value="password123" required>
+          </div>
+          <div class="quick-login-pills">
+            <small>Akun Cepat:</small>
+            <button type="button" class="pill-btn modal-pill" data-email="admin@placeholder.test">Admin Placeholder</button>
+            <button type="button" class="pill-btn modal-pill" data-email="driver@placeholder.test">Driver Placeholder</button>
+            <button type="button" class="pill-btn modal-pill" data-email="customer@placeholder.test">Customer Placeholder</button>
+          </div>
+          <div id="modal-login-error-msg" class="error-banner" style="display: none;"></div>
+          <button type="submit" class="btn-primary-map btn-block" style="margin-top: 6px;">Login Sekarang</button>
+        </form>
       </div>
     </div>
   </div>

@@ -461,6 +461,7 @@ if (localStorage.getItem("yt-theme") === "light") {
 
 renderChips();
 renderVideos(VIDEOS);
+syncUserUIState();
 
 /* ==========================================================================
    INTEGRASI MODUL A & MODUL B (ES6+ VANILLA JAVASCRIPT & DOM MANIPULATION)
@@ -1015,48 +1016,137 @@ async function apiRequest(endpoint, options = {}) {
   return data;
 }
 
+function syncUserUIState() {
+  const menuUserName = document.getElementById("menu-user-name");
+  const menuUserEmail = document.getElementById("menu-user-email");
+  const menuAuthBadge = document.getElementById("menu-auth-badge");
+  const menuAuthAction = document.getElementById("menu-btn-auth-action");
+  const headerAvatar = document.getElementById("header-user-avatar");
+  const menuAvatar = document.getElementById("menu-user-avatar");
+
+  if (currentAuthToken && currentAuthUser) {
+    if (menuUserName) menuUserName.textContent = currentAuthUser.name;
+    if (menuUserEmail) menuUserEmail.textContent = currentAuthUser.email;
+    if (menuAuthBadge) {
+      menuAuthBadge.innerHTML = `<span class="badge badge-status ${currentAuthUser.role === 'admin' ? 'in_transit' : 'delivered'}">Role: ${currentAuthUser.role.toUpperCase()}</span>`;
+    }
+    if (menuAuthAction) {
+      menuAuthAction.textContent = "Keluar (Logout)";
+      menuAuthAction.style.color = "#ef4444";
+    }
+    const avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${currentAuthUser.email}`;
+    if (headerAvatar) headerAvatar.src = avatarUrl;
+    if (menuAvatar) menuAvatar.src = avatarUrl;
+  } else {
+    if (menuUserName) menuUserName.textContent = "Tamu (Belum Login)";
+    if (menuUserEmail) menuUserEmail.textContent = "guest@placeholder.test";
+    if (menuAuthBadge) {
+      menuAuthBadge.innerHTML = `<span class="badge badge-neutral">Role: Guest</span>`;
+    }
+    if (menuAuthAction) {
+      menuAuthAction.textContent = "Masuk Akun (Login)";
+      menuAuthAction.style.color = "#3ea6ff";
+    }
+    if (headerAvatar) headerAvatar.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop";
+    if (menuAvatar) menuAvatar.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop";
+  }
+}
+
+// Modal Login Controls
+const loginModal = document.getElementById("login-modal");
+const loginModalClose = document.getElementById("login-modal-close");
+const loginModalBackdrop = document.getElementById("login-modal-backdrop");
+
+function openLoginModal() {
+  if (loginModal) loginModal.classList.add("active");
+  dom.profileDropdown.classList.remove("open");
+}
+
+function closeLoginModal() {
+  if (loginModal) loginModal.classList.remove("active");
+}
+
+if (loginModalClose) loginModalClose.addEventListener("click", closeLoginModal);
+if (loginModalBackdrop) loginModalBackdrop.addEventListener("click", closeLoginModal);
+
+// Menu buttons in header profile dropdown
+const menuBtnAuthAction = document.getElementById("menu-btn-auth-action");
+if (menuBtnAuthAction) {
+  menuBtnAuthAction.addEventListener("click", () => {
+    if (currentAuthToken) {
+      logoutSanctum();
+    } else {
+      openLoginModal();
+    }
+  });
+}
+
+const menuBtnMyOrders = document.getElementById("menu-btn-my-orders");
+if (menuBtnMyOrders) {
+  menuBtnMyOrders.addEventListener("click", e => {
+    e.preventDefault();
+    dom.profileDropdown.classList.remove("open");
+    switchSPATab("orders");
+  });
+}
+
+const menuBtnOpenMap = document.getElementById("menu-btn-open-map");
+if (menuBtnOpenMap) {
+  menuBtnOpenMap.addEventListener("click", e => {
+    e.preventDefault();
+    dom.profileDropdown.classList.remove("open");
+    switchSPATab("map");
+  });
+}
+
 function checkAuthAndRenderOrders() {
+  syncUserUIState();
+
   const authGateBox = document.getElementById("auth-gate-box");
   const protectedContent = document.getElementById("protected-spa-content");
   const authUserBar = document.getElementById("auth-user-bar");
 
   if (!currentAuthToken || !currentAuthUser) {
-    authGateBox.style.display = "block";
-    protectedContent.style.display = "none";
-    authUserBar.innerHTML = `<span class="badge badge-neutral">Belum Login</span>`;
+    if (authGateBox) authGateBox.style.display = "block";
+    if (protectedContent) protectedContent.style.display = "none";
+    if (authUserBar) {
+      authUserBar.innerHTML = `
+        <button type="button" class="btn-primary-map btn-sm" id="btn-open-login-from-bar">Login Akun</button>
+      `;
+      document.getElementById("btn-open-login-from-bar").addEventListener("click", openLoginModal);
+    }
   } else {
-    authGateBox.style.display = "none";
-    protectedContent.style.display = "grid";
-    authUserBar.innerHTML = `
-      <div class="auth-user-tag">
-        <strong>${currentAuthUser.name}</strong> (${currentAuthUser.role})
-        <button type="button" class="btn-ctrl btn-sm" id="btn-logout-sanctum" style="padding: 2px 8px; font-size: 0.75rem;">Logout</button>
-      </div>
-    `;
-
-    document.getElementById("btn-logout-sanctum").addEventListener("click", logoutSanctum);
+    if (authGateBox) authGateBox.style.display = "none";
+    if (protectedContent) protectedContent.style.display = "grid";
+    if (authUserBar) {
+      authUserBar.innerHTML = `
+        <div class="auth-user-tag">
+          <strong>${currentAuthUser.name}</strong> (${currentAuthUser.role.toUpperCase()})
+          <button type="button" class="btn-ctrl btn-sm" id="btn-logout-sanctum" style="padding: 2px 8px; font-size: 0.75rem;">Logout</button>
+        </div>
+      `;
+      document.getElementById("btn-logout-sanctum").addEventListener("click", logoutSanctum);
+    }
 
     loadAPIRoutes();
     loadAPIOrders();
   }
 }
 
-// Quick login buttons
+// Quick login buttons (both in in-page form and modal)
 document.querySelectorAll(".quick-login-pills .pill-btn").forEach(btn => {
   btn.addEventListener("click", () => {
-    document.getElementById("login-email").value = btn.getAttribute("data-email");
-    document.getElementById("login-pass").value = "password123";
+    const email = btn.getAttribute("data-email");
+    const p1 = document.getElementById("login-email");
+    const p2 = document.getElementById("modal-login-email");
+    if (p1) p1.value = email;
+    if (p2) p2.value = email;
   });
 });
 
-// Form Login Submit
-document.getElementById("form-login").addEventListener("submit", async e => {
-  e.preventDefault();
-  const email = document.getElementById("login-email").value;
-  const password = document.getElementById("login-pass").value;
-  const errorMsg = document.getElementById("login-error-msg");
-  errorMsg.style.display = "none";
-
+// Universal Login Submit Handler
+async function performLogin(email, password, errorElement) {
+  if (errorElement) errorElement.style.display = "none";
   try {
     const res = await apiRequest("/auth/login", {
       method: "POST",
@@ -1068,13 +1158,42 @@ document.getElementById("form-login").addEventListener("submit", async e => {
     localStorage.setItem(AUTH_TOKEN_KEY, currentAuthToken);
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(currentAuthUser));
 
-    showToast(`Selamat datang, ${res.user.name}!`);
+    showToast(`Berhasil masuk sebagai ${res.user.name} (${res.user.role})`);
+    closeLoginModal();
     checkAuthAndRenderOrders();
   } catch (err) {
-    errorMsg.textContent = err.message || "Gagal masuk ke sistem.";
-    errorMsg.style.display = "block";
+    if (errorElement) {
+      errorElement.textContent = err.message || "Gagal masuk ke sistem.";
+      errorElement.style.display = "block";
+    }
   }
-});
+}
+
+// In-Page Form Login
+const formLogin = document.getElementById("form-login");
+if (formLogin) {
+  formLogin.addEventListener("submit", e => {
+    e.preventDefault();
+    performLogin(
+      document.getElementById("login-email").value,
+      document.getElementById("login-pass").value,
+      document.getElementById("login-error-msg")
+    );
+  });
+}
+
+// Modal Form Login
+const formLoginModal = document.getElementById("form-login-modal");
+if (formLoginModal) {
+  formLoginModal.addEventListener("submit", e => {
+    e.preventDefault();
+    performLogin(
+      document.getElementById("modal-login-email").value,
+      document.getElementById("modal-login-pass").value,
+      document.getElementById("modal-login-error-msg")
+    );
+  });
+}
 
 // Logout Sanctum
 async function logoutSanctum() {
@@ -1087,7 +1206,7 @@ async function logoutSanctum() {
   localStorage.removeItem(AUTH_USER_KEY);
   currentAuthToken = null;
   currentAuthUser = null;
-  showToast("Anda telah logout.");
+  showToast("Anda telah keluar dari akun.");
   checkAuthAndRenderOrders();
 }
 
