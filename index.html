@@ -258,8 +258,33 @@
 
             <!-- Route Finding & Options Sidepanel -->
             <div class="map-sidebar-panel">
+              <!-- Natural Bridge: Active Tracked Order Banner from Modul B -->
+              <div class="panel-card order-sync-card" id="map-order-tracker-card" style="display: none;">
+                <div class="tracker-header">
+                  <span class="badge-status in_transit">Order Terpantau</span>
+                  <button type="button" class="btn-ctrl btn-sm" id="btn-clear-tracked-order">&times; Batal</button>
+                </div>
+                <div class="tracker-body">
+                  <h4 id="track-order-no">ORD-XXXX</h4>
+                  <p id="track-order-route" class="track-sub">Origin ➔ Destination</p>
+                  <div class="track-meta">
+                    <span>Muatan: <strong id="track-order-weight">0 kg</strong></span>
+                    <span>Total: <strong id="track-order-cost">Rp 0</strong></span>
+                  </div>
+                  <button type="button" class="btn-primary-map btn-block btn-sm" id="btn-simulate-transit" style="margin-top: 8px;">
+                    Simulasikan Perjalanan Driver
+                  </button>
+                </div>
+              </div>
+
               <div class="panel-card">
                 <h3>Kalkulator Rute & Navigasi</h3>
+                <div class="form-group-map">
+                  <label for="map-api-route-select">Tautkan Rute Backend (Modul B):</label>
+                  <select id="map-api-route-select" class="form-input-map">
+                    <option value="">-- Mode Graf Bebas (Custom) --</option>
+                  </select>
+                </div>
                 <div class="form-group-map">
                   <label for="route-start-select">Titik Awal (Origin):</label>
                   <select id="route-start-select" class="form-input-map">

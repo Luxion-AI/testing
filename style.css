@@ -1434,3 +1434,45 @@ body.sidebar-collapsed .main-content {
   }
 }
 
+/* --- Natural Integration: Order Tracker Card & Transit Simulation --- */
+.order-sync-card {
+  border-left: 4px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.tracker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tracker-body h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #3ea6ff;
+  margin-top: 4px;
+}
+
+.track-sub {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.track-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  background: var(--bg-elevated);
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+/* Animated Vehicle Marker on SVG Map */
+.svg-vehicle-marker {
+  transition: transform 0.25s linear;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.8));
+}
+
+

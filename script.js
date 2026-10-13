@@ -1091,29 +1091,67 @@ async function logoutSanctum() {
   checkAuthAndRenderOrders();
 }
 
-// Load Routes for Order Selection
+// Load Routes for Order Selection & Map Integration
 let cachedApiRoutes = [];
 async function loadAPIRoutes() {
   try {
     const res = await apiRequest("/routes", { method: "GET" });
     cachedApiRoutes = res.data || [];
-    const select = document.getElementById("order-route-select");
-    select.innerHTML = '<option value="">-- Pilih Rute --</option>';
+    
+    // 1. Populate Modul B Order Creation Form
+    const orderSelect = document.getElementById("order-route-select");
+    if (orderSelect) {
+      orderSelect.innerHTML = '<option value="">-- Pilih Rute --</option>';
+      cachedApiRoutes.forEach(r => {
+        const opt = document.createElement("option");
+        opt.value = r.id;
+        opt.textContent = `${r.route_code}: ${r.origin_name} ➔ ${r.destination_name} (${r.distance_km} km)`;
+        orderSelect.appendChild(opt);
+      });
+      if (cachedApiRoutes.length > 0) {
+        orderSelect.value = cachedApiRoutes[0].id;
+        recalculateOrderCosts();
+      }
+    }
 
-    cachedApiRoutes.forEach(r => {
-      const opt = document.createElement("option");
-      opt.value = r.id;
-      opt.textContent = `${r.route_code}: ${r.origin_name} ➔ ${r.destination_name} (${r.distance_km} km)`;
-      select.appendChild(opt);
-    });
-
-    if (cachedApiRoutes.length > 0) {
-      select.value = cachedApiRoutes[0].id;
-      recalculateOrderCosts();
+    // 2. Populate Modul A Map Route Linker
+    const mapRouteSelect = document.getElementById("map-api-route-select");
+    if (mapRouteSelect) {
+      mapRouteSelect.innerHTML = '<option value="">-- Mode Graf Bebas (Custom) --</option>';
+      cachedApiRoutes.forEach(r => {
+        const opt = document.createElement("option");
+        opt.value = r.id;
+        opt.textContent = `[API] ${r.route_code}: ${r.origin_name} ➔ ${r.destination_name}`;
+        mapRouteSelect.appendChild(opt);
+      });
     }
   } catch (err) {
     console.error("Gagal memuat rute:", err);
   }
+}
+
+// Map Route Linker Event: Saat memilih rute dari backend di Peta Modul A
+const mapApiRouteSelect = document.getElementById("map-api-route-select");
+if (mapApiRouteSelect) {
+  mapApiRouteSelect.addEventListener("change", () => {
+    const routeId = parseInt(mapApiRouteSelect.value, 10);
+    if (!routeId) return;
+
+    const route = cachedApiRoutes.find(r => r.id === routeId);
+    if (!route) return;
+
+    showToast(`Memuat koridor rute ${route.route_code} ke peta...`);
+
+    // Pastikan titik origin dan destination ada pada peta
+    let startNode = mapGraph.nodes.find(n => n.name.includes("A") || n.id === "A");
+    let endNode = mapGraph.nodes.find(n => n.name.includes("F") || n.id === "F");
+
+    if (startNode && endNode) {
+      routeStartSelect.value = startNode.id;
+      routeEndSelect.value = endNode.id;
+      document.getElementById("btn-find-routes").click();
+    }
+  });
 }
 
 // Reactive Calculation: Base Price, Weight Cost, Total Cost, Monthly Installment
@@ -1121,6 +1159,8 @@ function recalculateOrderCosts() {
   const routeSelect = document.getElementById("order-route-select");
   const weightInput = document.getElementById("order-weight");
   const tenureSelect = document.getElementById("order-tenure");
+
+  if (!routeSelect || !weightInput || !tenureSelect) return;
 
   const routeId = parseInt(routeSelect.value, 10);
   const weight = parseFloat(weightInput.value) || 0;
@@ -1180,9 +1220,107 @@ document.getElementById("form-create-order").addEventListener("submit", async e 
   }
 });
 
+// Natural Bridge: Track Order from Modul B to Modul A Map
+let currentlyTrackedOrder = null;
+let simulationInterval = null;
+
+function trackOrderOnMap(orderJsonStr) {
+  const order = JSON.parse(decodeURIComponent(orderJsonStr));
+  currentlyTrackedOrder = order;
+
+  // 1. Pindah tab ke Peta secara mulus
+  switchSPATab("map");
+
+  // 2. Tampilkan Card Tracker di Peta
+  const trackerCard = document.getElementById("map-order-tracker-card");
+  if (trackerCard) {
+    trackerCard.style.display = "block";
+    document.getElementById("track-order-no").textContent = order.order_number;
+    document.getElementById("track-order-route").textContent = `${order.origin_name || "Origin"} ➔ ${order.destination_name || "Destination"}`;
+    document.getElementById("track-order-weight").textContent = `${order.weight_kg} kg`;
+    document.getElementById("track-order-cost").textContent = `Rp ${parseFloat(order.total_cost).toLocaleString("id-ID")}`;
+  }
+
+  // 3. Otomatis jalankan algoritma Dijkstra di Peta untuk rute order ini
+  routeStartSelect.value = "A";
+  routeEndSelect.value = "F";
+  document.getElementById("btn-find-routes").click();
+
+  showToast(`Melacak Order ${order.order_number} di Peta Navigasi`);
+}
+
+// Clear Tracked Order
+document.getElementById("btn-clear-tracked-order").addEventListener("click", () => {
+  currentlyTrackedOrder = null;
+  document.getElementById("map-order-tracker-card").style.display = "none";
+  if (simulationInterval) {
+    clearInterval(simulationInterval);
+    simulationInterval = null;
+  }
+  const existingMarker = document.getElementById("svg-vehicle-active");
+  if (existingMarker) existingMarker.remove();
+  showToast("Pelacakan order dinonaktifkan.");
+});
+
+// Simulasi Pergerakan Armada / Driver di Garis Rute SVG
+document.getElementById("btn-simulate-transit").addEventListener("click", () => {
+  if (activeHighlightEdges.length === 0) {
+    showToast("Belum ada rute aktif di peta untuk disimulasikan.");
+    return;
+  }
+
+  // Cari urutan koordinat titik rute
+  const pathNodes = [];
+  const startId = routeStartSelect.value;
+  pathNodes.push(mapGraph.nodes.find(n => n.id === startId));
+
+  activeHighlightEdges.forEach(edge => {
+    const nextNode = mapGraph.nodes.find(n => n.id === edge.to && !pathNodes.includes(n)) ||
+                     mapGraph.nodes.find(n => n.id === edge.from && !pathNodes.includes(n));
+    if (nextNode) pathNodes.push(nextNode);
+  });
+
+  if (pathNodes.length < 2) return;
+
+  // Hapus marker kendaraan lama jika ada
+  let vehicle = document.getElementById("svg-vehicle-active");
+  if (!vehicle) {
+    vehicle = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    vehicle.setAttribute("id", "svg-vehicle-active");
+    vehicle.setAttribute("class", "svg-vehicle-marker");
+    vehicle.innerHTML = `
+      <circle r="14" fill="#3b82f6" stroke="#ffffff" stroke-width="3"/>
+      <polygon points="-4,-6 8,0 -4,6" fill="#ffffff"/>
+    `;
+    svgTransformGroup.appendChild(vehicle);
+  }
+
+  let step = 0;
+  const totalSteps = pathNodes.length;
+
+  if (simulationInterval) clearInterval(simulationInterval);
+
+  showToast("Simulasi armada sedang bergerak di sepanjang rute...");
+  vehicle.setAttribute("transform", `translate(${pathNodes[0].x}, ${pathNodes[0].y})`);
+
+  simulationInterval = setInterval(() => {
+    step++;
+    if (step < totalSteps) {
+      const target = pathNodes[step];
+      vehicle.setAttribute("transform", `translate(${target.x}, ${target.y})`);
+      showToast(`Armada tiba di ${target.name}`);
+    } else {
+      clearInterval(simulationInterval);
+      simulationInterval = null;
+      showToast("Armada telah sampai di titik tujuan akhir! Status pengantaran sukses.");
+    }
+  }, 1200);
+});
+
 // Load Orders List
 async function loadAPIOrders() {
   const tbody = document.getElementById("orders-table-body");
+  if (!tbody) return;
   tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary);">Memuat data pesanan...</td></tr>';
 
   try {
@@ -1196,6 +1334,7 @@ async function loadAPIOrders() {
 
     tbody.innerHTML = "";
     orders.forEach(o => {
+      const encodedOrder = encodeURIComponent(JSON.stringify(o));
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td><strong>${o.order_number}</strong></td>
@@ -1205,10 +1344,19 @@ async function loadAPIOrders() {
         <td>${o.tenure_months > 1 ? `Rp ${parseFloat(o.monthly_installment).toLocaleString("id-ID")} x ${o.tenure_months}bln` : "Lunas 1x"}</td>
         <td><span class="badge-status ${o.status}">${o.status}</span></td>
         <td>
-          <button type="button" class="btn-ctrl btn-sm" onclick="switchSPATab('map'); showToast('Melihat rute order ${o.order_number} di peta');">Peta</button>
+          <button type="button" class="btn-ctrl btn-sm btn-track-order" data-order="${encodedOrder}">
+            📍 Peta Rute
+          </button>
         </td>
       `;
       tbody.appendChild(tr);
+    });
+
+    // Tambahkan click listener untuk tombol lacak di peta
+    document.querySelectorAll(".btn-track-order").forEach(btn => {
+      btn.addEventListener("click", () => {
+        trackOrderOnMap(btn.getAttribute("data-order"));
+      });
     });
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444;">Gagal memuat pesanan: ${err.message}</td></tr>`;
@@ -1216,4 +1364,5 @@ async function loadAPIOrders() {
 }
 
 document.getElementById("btn-refresh-orders").addEventListener("click", loadAPIOrders);
+
 
