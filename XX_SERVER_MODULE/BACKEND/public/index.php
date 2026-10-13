@@ -1,13 +1,6 @@
 <?php
 declare(strict_types=1);
 
-/**
- * Standard W3C & RESTful API Architecture
- * XX_SERVER_MODULE/BACKEND Front Controller & Micro-Framework
- * Supports Laravel Sanctum Bearer Token standards, FormRequest validations,
- * Relational SQLite/MySQL models, and strict JSON status codes (200, 401, 422).
- */
-
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept');
@@ -19,7 +12,6 @@ if ($method === 'OPTIONS') {
     exit;
 }
 
-// Database initialization (SQLite local relational DB)
 $dbPath = __DIR__ . '/../database/database.sqlite';
 $isNew = !file_exists($dbPath);
 
@@ -28,7 +20,7 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
-    // Initial Schema & Migrations
+    
     if ($isNew || filesize($dbPath) === 0) {
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS users (
@@ -82,7 +74,7 @@ try {
             );
         ");
 
-        // Seeders
+        
         $passHash = password_hash('password123', PASSWORD_BCRYPT);
         $pdo->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)")->execute([
             'Admin Placeholder', 'admin@placeholder.test', $passHash, 'admin'
@@ -94,7 +86,7 @@ try {
             'Customer Placeholder', 'customer@placeholder.test', $passHash, 'customer'
         ]);
 
-        // Seed Routes
+        
         $pdo->prepare("INSERT INTO routes (route_code, origin_name, destination_name, distance_km, estimated_minutes, base_price, nodes_data) VALUES (?, ?, ?, ?, ?, ?, ?)")->execute([
             'RT-CGK-BDG', 'Jakarta Hub (Garasi)', 'Bandung Drop Point', 152.5, 140, 250000,
             json_encode([['id' => 'N1', 'x' => 120, 'y' => 180], ['id' => 'N2', 'x' => 380, 'y' => 240], ['id' => 'N3', 'x' => 640, 'y' => 320]])
@@ -104,7 +96,7 @@ try {
             json_encode([['id' => 'N3', 'x' => 640, 'y' => 320], ['id' => 'N4', 'x' => 820, 'y' => 450]])
         ]);
 
-        // Seed Sample Orders
+        
         $pdo->prepare("INSERT INTO orders (order_number, user_id, route_id, package_type, weight_kg, total_cost, monthly_installment, tenure_months, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")->execute([
             'ORD-2026-001', 3, 1, 'Express Logistics', 12.5, 312500, 104166.67, 3, 'in_transit'
         ]);
@@ -115,21 +107,17 @@ try {
     exit;
 }
 
-// Routing helper
 $uri = $_SERVER['REQUEST_URI'] ?? '/';
 $path = parse_url($uri, PHP_URL_PATH) ?? '/';
 
-// Normalize path to strip possible prefix
 $path = preg_replace('#^.*?/api/v1#', '/api/v1', $path);
 
-// Helper JSON responses
 function jsonResponse(int $code, array $data): void {
     http_response_code($code);
     echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
-// Token helper (Laravel Sanctum Simulation)
 function getBearerToken(): ?string {
     $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? null;
     if (!$auth && function_exists('getallheaders')) {
@@ -159,9 +147,6 @@ function authenticate(PDO $pdo): ?array {
 $rawInput = file_get_contents('php://input');
 $body = json_decode($rawInput, true) ?? $_POST ?? [];
 
-// ==================== ENDPOINTS ====================
-
-// 1. POST /api/v1/auth/login
 if ($path === '/api/v1/auth/login' && $method === 'POST') {
     $email = trim($body['email'] ?? '');
     $password = trim($body['password'] ?? '');
@@ -188,7 +173,7 @@ if ($path === '/api/v1/auth/login' && $method === 'POST') {
         ]);
     }
 
-    // Generate Sanctum token
+    
     $tokenString = bin2hex(random_bytes(32));
     $stmt = $pdo->prepare("INSERT INTO personal_access_tokens (tokenable_id, name, token) VALUES (?, ?, ?)");
     $stmt->execute([$user['id'], 'spa_token', $tokenString]);
@@ -207,7 +192,6 @@ if ($path === '/api/v1/auth/login' && $method === 'POST') {
     ]);
 }
 
-// 2. POST /api/v1/auth/logout
 if ($path === '/api/v1/auth/logout' && $method === 'POST') {
     $token = getBearerToken();
     if (!$token) {
@@ -223,10 +207,8 @@ if ($path === '/api/v1/auth/logout' && $method === 'POST') {
     ]);
 }
 
-// Protected route middleware check for below routes
 $currentUser = authenticate($pdo);
 
-// 3. GET /api/v1/auth/me
 if ($path === '/api/v1/auth/me' && $method === 'GET') {
     if (!$currentUser) {
         jsonResponse(401, ['message' => 'Unauthenticated. Token tidak valid atau kedaluwarsa.']);
@@ -242,7 +224,6 @@ if ($path === '/api/v1/auth/me' && $method === 'GET') {
     ]);
 }
 
-// 4. GET & POST /api/v1/routes
 if ($path === '/api/v1/routes') {
     if ($method === 'GET') {
         $stmt = $pdo->query("SELECT * FROM routes ORDER BY id DESC");
@@ -283,7 +264,6 @@ if ($path === '/api/v1/routes') {
     }
 }
 
-// 5. GET & POST /api/v1/orders
 if ($path === '/api/v1/orders') {
     if ($method === 'GET') {
         if (!$currentUser) jsonResponse(401, ['message' => 'Unauthenticated.']);
@@ -317,16 +297,16 @@ if ($path === '/api/v1/orders') {
             jsonResponse(422, ['message' => 'Validation error', 'errors' => $errors]);
         }
 
-        // Fetch route
+        
         $rStmt = $pdo->prepare("SELECT * FROM routes WHERE id = ?");
         $rStmt->execute([$routeId]);
         $route = $rStmt->fetch();
         if (!$route) jsonResponse(422, ['errors' => ['route_id' => ['Rute tidak ditemukan.']]]);
 
-        // Dynamic cost & installment calculation
+        
         $base = floatval($route['base_price']);
         $totalCost = $base + ($weight * 12500);
-        // Bunga angsuran 2.5% per bulan jika diangsur
+        
         $interest = ($tenure > 1) ? ($totalCost * 0.025 * $tenure) : 0;
         $grandTotal = $totalCost + $interest;
         $monthlyInstallment = round($grandTotal / $tenure, 2);
@@ -354,7 +334,6 @@ if ($path === '/api/v1/orders') {
     }
 }
 
-// 6. Default Fallback
 jsonResponse(404, [
     'status' => 'error',
     'message' => 'Endpoint API tidak ditemukan.',

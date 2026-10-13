@@ -190,6 +190,17 @@ const state = {
   subscribed: false
 };
 
+const AUTH_TOKEN_KEY = "yt_sanctum_token";
+const AUTH_USER_KEY = "yt_sanctum_user";
+
+let currentAuthToken = localStorage.getItem(AUTH_TOKEN_KEY);
+let currentAuthUser = null;
+try {
+  currentAuthUser = JSON.parse(localStorage.getItem(AUTH_USER_KEY));
+} catch (e) {
+  currentAuthUser = null;
+}
+
 const dom = {
   chipsBar: document.getElementById("chips-bar"),
   videoGrid: document.getElementById("video-grid"),
@@ -207,6 +218,7 @@ const dom = {
   createBtn: document.getElementById("create-btn"),
   notifBtn: document.getElementById("notif-btn"),
   notifDropdown: document.getElementById("notif-dropdown"),
+  headerSigninBtn: document.getElementById("header-signin-btn"),
   profileBtn: document.getElementById("profile-btn"),
   profileDropdown: document.getElementById("profile-dropdown"),
   modal: document.getElementById("video-modal"),
@@ -229,6 +241,50 @@ function showToast(msg) {
   dom.toast.classList.add("show");
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => dom.toast.classList.remove("show"), 2500);
+}
+
+function syncUserUIState() {
+  const menuUserName = document.getElementById("menu-user-name");
+  const menuUserEmail = document.getElementById("menu-user-email");
+  const menuAuthBadge = document.getElementById("menu-auth-badge");
+  const menuAuthAction = document.getElementById("menu-btn-auth-action");
+  const headerAvatar = document.getElementById("header-user-avatar");
+  const menuAvatar = document.getElementById("menu-user-avatar");
+  const headerSigninBtn = document.getElementById("header-signin-btn");
+  const profileBtn = document.getElementById("profile-btn");
+
+  if (currentAuthToken && currentAuthUser) {
+    if (headerSigninBtn) headerSigninBtn.style.display = "none";
+    if (profileBtn) profileBtn.style.display = "inline-flex";
+
+    if (menuUserName) menuUserName.textContent = currentAuthUser.name;
+    if (menuUserEmail) menuUserEmail.textContent = currentAuthUser.email;
+    if (menuAuthBadge) {
+      menuAuthBadge.innerHTML = `<span class="badge badge-status ${currentAuthUser.role === 'admin' ? 'in_transit' : 'delivered'}">Role: ${currentAuthUser.role.toUpperCase()}</span>`;
+    }
+    if (menuAuthAction) {
+      menuAuthAction.textContent = "Keluar (Logout)";
+      menuAuthAction.style.color = "#ef4444";
+    }
+    const avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(currentAuthUser.email)}`;
+    if (headerAvatar) headerAvatar.src = avatarUrl;
+    if (menuAvatar) menuAvatar.src = avatarUrl;
+  } else {
+    if (headerSigninBtn) headerSigninBtn.style.display = "inline-flex";
+    if (profileBtn) profileBtn.style.display = "none";
+
+    if (menuUserName) menuUserName.textContent = "Pengguna (Belum Masuk)";
+    if (menuUserEmail) menuUserEmail.textContent = "guest@placeholder.test";
+    if (menuAuthBadge) {
+      menuAuthBadge.innerHTML = `<span class="badge badge-neutral">Role: Guest</span>`;
+    }
+    if (menuAuthAction) {
+      menuAuthAction.textContent = "Masuk ke Akun";
+      menuAuthAction.style.color = "#3ea6ff";
+    }
+    if (headerAvatar) headerAvatar.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop";
+    if (menuAvatar) menuAvatar.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop";
+  }
 }
 
 function renderChips() {
@@ -463,11 +519,6 @@ renderChips();
 renderVideos(VIDEOS);
 syncUserUIState();
 
-/* ==========================================================================
-   INTEGRASI MODUL A & MODUL B (ES6+ VANILLA JAVASCRIPT & DOM MANIPULATION)
-   ========================================================================== */
-
-// --- SPA Tab Switcher (Beranda, Peta & Pathfinding, Dispatch Orders) ---
 function switchSPATab(targetTab) {
   document.querySelectorAll(".nav-link").forEach(link => {
     link.classList.toggle("active", link.getAttribute("data-tab") === targetTab);
@@ -497,13 +548,8 @@ document.querySelectorAll(".nav-link[data-tab]").forEach(link => {
   });
 });
 
-/* ==========================================================================
-   MODUL A: DYNAMIC SVG MAP, GEOMETRY, PAN/ZOOM & DIJKSTRA PATHFINDING
-   ========================================================================== */
-
 const MAP_STORAGE_KEY = "yt_lks_map_graph_data";
 
-// Initial preset nodes & edges
 const DEFAULT_MAP_DATA = {
   nodes: [
     { id: "A", name: "Hub Node A (Placeholder)", x: 220, y: 160 },
@@ -525,7 +571,6 @@ const DEFAULT_MAP_DATA = {
   ]
 };
 
-// Graph State with localStorage persistence
 let mapGraph = JSON.parse(localStorage.getItem(MAP_STORAGE_KEY)) || DEFAULT_MAP_DATA;
 
 function saveMapGraph() {
@@ -533,7 +578,6 @@ function saveMapGraph() {
   updateDropdowns();
 }
 
-// Pan & Zoom Transform State
 let mapTransform = {
   scale: 1.0,
   x: 0,
@@ -566,9 +610,8 @@ function applyMapTransform() {
   zoomLevelLabel.textContent = `${Math.round(mapTransform.scale * 100)}%`;
 }
 
-// Pan interactions: mousedown, mousemove, mouseup
 mapViewport.addEventListener("mousedown", e => {
-  // Hanya pan jika klik di area viewport bukan di node
+  
   if (e.target.closest(".svg-node")) return;
   mapTransform.isPanning = true;
   mapTransform.startX = e.clientX - mapTransform.x;
@@ -590,7 +633,6 @@ window.addEventListener("mouseup", () => {
   }
 });
 
-// Zoom interactions: CTRL + Wheel & Buttons
 mapViewport.addEventListener("wheel", e => {
   if (e.ctrlKey || e.metaKey) {
     e.preventDefault();
@@ -605,7 +647,7 @@ mapViewport.addEventListener("wheel", e => {
 
 function zoomAtPoint(screenX, screenY, factor) {
   const newScale = Math.min(Math.max(0.4, mapTransform.scale * factor), 3.0);
-  // Fokus zoom mengikuti posisi kursor
+  
   mapTransform.x = screenX - (screenX - mapTransform.x) * (newScale / mapTransform.scale);
   mapTransform.y = screenY - (screenY - mapTransform.y) * (newScale / mapTransform.scale);
   mapTransform.scale = newScale;
@@ -629,7 +671,6 @@ document.getElementById("btn-reset-zoom").addEventListener("click", () => {
   applyMapTransform();
 });
 
-// Shortcut Keydown (+/- zoom dan Escape)
 mapViewport.addEventListener("keydown", e => {
   const rect = mapViewport.getBoundingClientRect();
   if (e.key === "+" || e.key === "=") {
@@ -639,17 +680,16 @@ mapViewport.addEventListener("keydown", e => {
   }
 });
 
-// Double click to add new Pinpoint (circle)
 mapViewport.addEventListener("dblclick", e => {
   const rect = mapViewport.getBoundingClientRect();
   const clickX = e.clientX - rect.left;
   const clickY = e.clientY - rect.top;
 
-  // Transform dari viewport screen ke koordinat SVG
+  
   const svgX = Math.round((clickX - mapTransform.x) / mapTransform.scale);
   const svgY = Math.round((clickY - mapTransform.y) / mapTransform.scale);
 
-  // Buat ID baru
+  
   const charCode = 65 + mapGraph.nodes.length;
   const nextId = charCode <= 90 ? String.fromCharCode(charCode) : `N${mapGraph.nodes.length + 1}`;
   const nodeName = `Titik Hub ${nextId}`;
@@ -660,7 +700,6 @@ mapViewport.addEventListener("dblclick", e => {
   showToast(`Pinpoint ${nextId} ditambahkan di (${svgX}, ${svgY})`);
 });
 
-// Render SVG Map Elements
 function renderMapSVG() {
   if (!svgLayerLines || !svgLayerNodes || !svgLayerLabels) return;
 
@@ -668,7 +707,7 @@ function renderMapSVG() {
   svgLayerLabels.innerHTML = "";
   svgLayerNodes.innerHTML = "";
 
-  // 1. Draw Edges (<line> and midpoint badges)
+  
   mapGraph.edges.forEach(edge => {
     const fromNode = mapGraph.nodes.find(n => n.id === edge.from);
     const toNode = mapGraph.nodes.find(n => n.id === edge.to);
@@ -678,7 +717,7 @@ function renderMapSVG() {
       ae => (ae.from === edge.from && ae.to === edge.to) || (ae.from === edge.to && ae.to === edge.from)
     );
 
-    // Visible connecting line
+    
     const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
     line.setAttribute("x1", fromNode.x);
     line.setAttribute("y1", fromNode.y);
@@ -687,11 +726,11 @@ function renderMapSVG() {
     line.setAttribute("class", `svg-edge-line ${isActive ? "active-route" : ""}`);
     svgLayerLines.appendChild(line);
 
-    // Geometry Calculation: Midpoint (X, Y)
+    
     const midX = (fromNode.x + toNode.x) / 2;
     const midY = (fromNode.y + toNode.y) / 2;
 
-    // Midpoint Text & Badge (Jarak & Biaya)
+    
     const gBadge = document.createElementNS("http://www.w3.org/2000/svg", "g");
     gBadge.setAttribute("class", "svg-midpoint-badge");
     gBadge.setAttribute("transform", `translate(${midX}, ${midY})`);
@@ -711,7 +750,7 @@ function renderMapSVG() {
     svgLayerLabels.appendChild(gBadge);
   });
 
-  // 2. Draw Nodes (<circle> pinpoint & text)
+  
   mapGraph.nodes.forEach(node => {
     const isSelected = selectedNodeForEdge && selectedNodeForEdge.id === node.id;
     const gNode = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -719,26 +758,26 @@ function renderMapSVG() {
     gNode.setAttribute("transform", `translate(${node.x}, ${node.y})`);
     gNode.setAttribute("data-id", node.id);
 
-    // Circle Marker
+    
     const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     circle.setAttribute("r", isSelected ? "15" : "12");
     circle.setAttribute("fill", isSelected ? "#ffd700" : "var(--yt-red)");
     gNode.appendChild(circle);
 
-    // ID Text inside circle
+    
     const textNode = document.createElementNS("http://www.w3.org/2000/svg", "text");
     textNode.setAttribute("class", "svg-node-text");
     textNode.textContent = node.id;
     gNode.appendChild(textNode);
 
-    // Sub-label name under node
+    
     const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
     label.setAttribute("class", "svg-node-label");
     label.setAttribute("y", "24");
     label.textContent = node.name;
     gNode.appendChild(label);
 
-    // Click handler on Node: Create edge between 2 nodes
+    
     gNode.addEventListener("click", e => {
       e.stopPropagation();
       handleNodeSelection(node);
@@ -760,12 +799,12 @@ function handleNodeSelection(node) {
     showToast("Pemilihan titik dibatalkan.");
     renderMapSVG();
   } else {
-    // Hubungkan node 1 dan node 2
+    
     const n1 = selectedNodeForEdge;
     const n2 = node;
     selectedNodeForEdge = null;
 
-    // Cek apakah edge sudah ada
+    
     const exists = mapGraph.edges.some(
       e => (e.from === n1.id && e.to === n2.id) || (e.from === n2.id && e.to === n1.id)
     );
@@ -773,7 +812,7 @@ function handleNodeSelection(node) {
     if (exists) {
       showToast(`Jalur antara ${n1.id} dan ${n2.id} sudah ada.`);
     } else {
-      // Hitung jarak Euclidean
+      
       const dx = n2.x - n1.x;
       const dy = n2.y - n1.y;
       const distPx = Math.sqrt(dx * dx + dy * dy);
@@ -795,7 +834,6 @@ function handleNodeSelection(node) {
   }
 }
 
-// Clear map and Reset to Defaults
 document.getElementById("btn-clear-map").addEventListener("click", () => {
   if (confirm("Reset semua titik dan garis peta ke setelan awal?")) {
     mapGraph = JSON.parse(JSON.stringify(DEFAULT_MAP_DATA));
@@ -815,7 +853,6 @@ document.getElementById("btn-sample-data").addEventListener("click", () => {
   showToast("Preset peta LKS berhasil dimuat!");
 });
 
-// Update Select Dropdowns
 function updateDropdowns() {
   const currentStart = routeStartSelect.value;
   const currentEnd = routeEndSelect.value;
@@ -838,10 +875,6 @@ function updateDropdowns() {
   if (currentStart) routeStartSelect.value = currentStart;
   if (currentEnd) routeEndSelect.value = currentEnd;
 }
-
-// ==========================================================================
-// ALGORITMA GRAPH: DIJKSTRA / K-SHORTEST PATHS & SORTING
-// ==========================================================================
 
 function findAllPaths(startId, endId, maxPaths = 10) {
   const adj = {};
@@ -887,11 +920,10 @@ function findAllPaths(startId, endId, maxPaths = 10) {
   return paths;
 }
 
-// Find Route Button Handler
 document.getElementById("btn-find-routes").addEventListener("click", () => {
   const start = routeStartSelect.value;
   const end = routeEndSelect.value;
-  const sortBy = routeSortSelect.value; // 'duration' or 'cost'
+  const sortBy = routeSortSelect.value; 
 
   if (!start || !end) {
     showToast("Silakan tentukan titik awal dan tujuan.");
@@ -912,7 +944,7 @@ document.getElementById("btn-find-routes").addEventListener("click", () => {
     return;
   }
 
-  // Sorting berdasarkan durasi tercepat atau biaya termurah
+  
   if (sortBy === "duration") {
     allRoutes.sort((a, b) => a.durationMin - b.durationMin);
   } else {
@@ -947,7 +979,7 @@ document.getElementById("btn-find-routes").addEventListener("click", () => {
     routeResultsList.appendChild(item);
   });
 
-  // Default highlight rute terbaik (opsi #1)
+  
   highlightRoute(top10Routes[0]);
   showToast(`Ditemukan ${top10Routes.length} alternatif rute terpendek/termurah.`);
 });
@@ -963,21 +995,53 @@ function highlightRoute(route) {
   renderMapSVG();
 }
 
-/* ==========================================================================
-   MODUL B: FRONTEND SPA & LARAVEL SANCTUM RESTful API CLIENT
-   ========================================================================== */
+let API_BASE_URL = "/api/v1";
+if (window.location.protocol === "file:") {
+  API_BASE_URL = "http://localhost:8000/api/v1";
+} else if (window.location.origin.includes(":8000")) {
+  API_BASE_URL = "/api/v1";
+} else if (window.location.origin.includes("localhost") || window.location.origin.includes("127.0.0.1")) {
+  API_BASE_URL = "/XX_SERVER_MODULE/BACKEND/public/index.php/api/v1";
+}
 
-const API_BASE_URL = window.location.origin.includes("localhost") || window.location.origin.includes("127.0.0.1")
-  ? "/XX_SERVER_MODULE/BACKEND/public/index.php/api/v1"
-  : "/api/v1";
+const MOCK_USERS = [
+  { id: 1, name: "Admin Placeholder", email: "admin@placeholder.test", password: "password123", role: "admin" },
+  { id: 2, name: "Driver Placeholder", email: "driver@placeholder.test", password: "password123", role: "driver" },
+  { id: 3, name: "Customer Placeholder", email: "customer@placeholder.test", password: "password123", role: "customer" }
+];
 
-const AUTH_TOKEN_KEY = "yt_sanctum_token";
-const AUTH_USER_KEY = "yt_sanctum_user";
+const MOCK_ROUTES = [
+  { id: 1, route_code: "RT-CGK-BDG", origin_name: "Jakarta Hub (Garasi)", destination_name: "Bandung Drop Point", distance_km: 152.5, estimated_minutes: 140, base_price: 250000 },
+  { id: 2, route_code: "RT-BDG-SBY", origin_name: "Bandung Central", destination_name: "Surabaya Port", distance_km: 680.0, estimated_minutes: 520, base_price: 850000 }
+];
 
-let currentAuthToken = localStorage.getItem(AUTH_TOKEN_KEY);
-let currentAuthUser = JSON.parse(localStorage.getItem(AUTH_USER_KEY));
+function getStoredMockOrders() {
+  const saved = localStorage.getItem("yt_mock_orders");
+  if (saved) {
+    try { return JSON.parse(saved); } catch(e) {}
+  }
+  return [
+    {
+      id: 1,
+      order_number: "ORD-2026-001",
+      user_id: 3,
+      route_id: 1,
+      origin_name: "Jakarta Hub (Garasi)",
+      destination_name: "Bandung Drop Point",
+      package_type: "Express Logistics",
+      weight_kg: 12.5,
+      total_cost: 312500,
+      monthly_installment: 104166.67,
+      tenure_months: 3,
+      status: "in_transit"
+    }
+  ];
+}
 
-// Axios-style Fetch Wrapper with Bearer Token Authorization
+function saveStoredMockOrders(orders) {
+  localStorage.setItem("yt_mock_orders", JSON.stringify(orders));
+}
+
 async function apiRequest(endpoint, options = {}) {
   const headers = {
     "Content-Type": "application/json",
@@ -989,77 +1053,121 @@ async function apiRequest(endpoint, options = {}) {
     headers["Authorization"] = `Bearer ${currentAuthToken}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers
-  });
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
 
-  const data = await response.json().catch(() => ({}));
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
 
-  if (response.status === 401) {
-    // Unauthorized token expired
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    localStorage.removeItem(AUTH_USER_KEY);
-    currentAuthToken = null;
-    currentAuthUser = null;
-    checkAuthAndRenderOrders();
-    throw new Error(data.message || "Sesi berakhir. Silakan login kembali.");
-  }
+    const data = await response.json().catch(() => ({}));
 
-  if (!response.ok) {
-    const error = new Error(data.message || `HTTP Error ${response.status}`);
-    error.status = response.status;
-    error.errors = data.errors || {};
-    throw error;
-  }
-
-  return data;
-}
-
-function syncUserUIState() {
-  const menuUserName = document.getElementById("menu-user-name");
-  const menuUserEmail = document.getElementById("menu-user-email");
-  const menuAuthBadge = document.getElementById("menu-auth-badge");
-  const menuAuthAction = document.getElementById("menu-btn-auth-action");
-  const headerAvatar = document.getElementById("header-user-avatar");
-  const menuAvatar = document.getElementById("menu-user-avatar");
-
-  if (currentAuthToken && currentAuthUser) {
-    if (menuUserName) menuUserName.textContent = currentAuthUser.name;
-    if (menuUserEmail) menuUserEmail.textContent = currentAuthUser.email;
-    if (menuAuthBadge) {
-      menuAuthBadge.innerHTML = `<span class="badge badge-status ${currentAuthUser.role === 'admin' ? 'in_transit' : 'delivered'}">Role: ${currentAuthUser.role.toUpperCase()}</span>`;
+    if (response.status === 401) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_USER_KEY);
+      currentAuthToken = null;
+      currentAuthUser = null;
+      checkAuthAndRenderOrders();
+      throw new Error(data.message || "Sesi berakhir. Silakan login kembali.");
     }
-    if (menuAuthAction) {
-      menuAuthAction.textContent = "Keluar (Logout)";
-      menuAuthAction.style.color = "#ef4444";
+
+    if (!response.ok) {
+      const error = new Error(data.message || `HTTP Error ${response.status}`);
+      error.status = response.status;
+      error.errors = data.errors || {};
+      throw error;
     }
-    const avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${currentAuthUser.email}`;
-    if (headerAvatar) headerAvatar.src = avatarUrl;
-    if (menuAvatar) menuAvatar.src = avatarUrl;
-  } else {
-    if (menuUserName) menuUserName.textContent = "Tamu (Belum Login)";
-    if (menuUserEmail) menuUserEmail.textContent = "guest@placeholder.test";
-    if (menuAuthBadge) {
-      menuAuthBadge.innerHTML = `<span class="badge badge-neutral">Role: Guest</span>`;
+
+    return data;
+  } catch (err) {
+    if (err.status && (err.status === 401 || err.status === 422)) {
+      throw err;
     }
-    if (menuAuthAction) {
-      menuAuthAction.textContent = "Masuk Akun (Login)";
-      menuAuthAction.style.color = "#3ea6ff";
-    }
-    if (headerAvatar) headerAvatar.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop";
-    if (menuAvatar) menuAvatar.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop";
+
+    
+    return handleMockApiRequest(endpoint, options);
   }
 }
 
-// Modal Login Controls
+function handleMockApiRequest(endpoint, options) {
+  const method = (options.method || "GET").toUpperCase();
+  const body = options.body ? JSON.parse(options.body) : {};
+
+  if (endpoint === "/auth/login" && method === "POST") {
+    const user = MOCK_USERS.find(u => u.email === body.email && u.password === body.password);
+    if (!user) {
+      const err = new Error("Email atau password yang Anda masukkan salah.");
+      err.status = 401;
+      throw err;
+    }
+    const token = `sanctum_token_${user.role}_${Date.now()}`;
+    return {
+      status: "success",
+      message: "Login berhasil.",
+      access_token: token,
+      token_type: "Bearer",
+      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+    };
+  }
+
+  if (endpoint === "/auth/logout" && method === "POST") {
+    return { status: "success", message: "Logout berhasil." };
+  }
+
+  if (endpoint === "/routes" && method === "GET") {
+    return { status: "success", data: MOCK_ROUTES };
+  }
+
+  if (endpoint === "/orders" && method === "GET") {
+    return { status: "success", data: getStoredMockOrders() };
+  }
+
+  if (endpoint === "/orders" && method === "POST") {
+    const route = MOCK_ROUTES.find(r => r.id === parseInt(body.route_id, 10)) || MOCK_ROUTES[0];
+    const weight = parseFloat(body.weight_kg) || 1;
+    const tenure = parseInt(body.tenure_months, 10) || 1;
+    const basePrice = route.base_price;
+    const weightCost = weight * 12500;
+    const subtotal = basePrice + weightCost;
+    const interest = tenure > 1 ? subtotal * 0.025 * tenure : 0;
+    const grandTotal = subtotal + interest;
+    const installment = Math.round(grandTotal / tenure);
+
+    const orders = getStoredMockOrders();
+    const newOrder = {
+      id: orders.length + 1,
+      order_number: `ORD-2026-${String(orders.length + 1).padStart(3, "0")}`,
+      user_id: currentAuthUser ? currentAuthUser.id : 1,
+      route_id: route.id,
+      origin_name: route.origin_name,
+      destination_name: route.destination_name,
+      package_type: body.package_type || "Express Logistics",
+      weight_kg: weight,
+      total_cost: grandTotal,
+      monthly_installment: installment,
+      tenure_months: tenure,
+      status: "pending"
+    };
+
+    orders.unshift(newOrder);
+    saveStoredMockOrders(orders);
+    return { status: "success", message: "Pesanan berhasil dibuat.", order: newOrder };
+  }
+
+  return { status: "success" };
+}
+
 const loginModal = document.getElementById("login-modal");
 const loginModalClose = document.getElementById("login-modal-close");
 const loginModalBackdrop = document.getElementById("login-modal-backdrop");
 
 function openLoginModal() {
   if (loginModal) loginModal.classList.add("active");
-  dom.profileDropdown.classList.remove("open");
+  if (dom.profileDropdown) dom.profileDropdown.classList.remove("open");
 }
 
 function closeLoginModal() {
@@ -1069,7 +1177,24 @@ function closeLoginModal() {
 if (loginModalClose) loginModalClose.addEventListener("click", closeLoginModal);
 if (loginModalBackdrop) loginModalBackdrop.addEventListener("click", closeLoginModal);
 
-// Menu buttons in header profile dropdown
+if (dom.headerSigninBtn) {
+  dom.headerSigninBtn.addEventListener("click", () => openLoginModal());
+}
+
+const bannerBtnOrders = document.getElementById("banner-btn-orders");
+if (bannerBtnOrders) {
+  bannerBtnOrders.addEventListener("click", () => switchSPATab("orders"));
+}
+const bannerBtnMap = document.getElementById("banner-btn-map");
+if (bannerBtnMap) {
+  bannerBtnMap.addEventListener("click", () => switchSPATab("map"));
+}
+
+const btnTriggerGuestLogin = document.getElementById("btn-trigger-guest-login");
+if (btnTriggerGuestLogin) {
+  btnTriggerGuestLogin.addEventListener("click", () => openLoginModal());
+}
+
 const menuBtnAuthAction = document.getElementById("menu-btn-auth-action");
 if (menuBtnAuthAction) {
   menuBtnAuthAction.addEventListener("click", () => {
@@ -1085,7 +1210,7 @@ const menuBtnMyOrders = document.getElementById("menu-btn-my-orders");
 if (menuBtnMyOrders) {
   menuBtnMyOrders.addEventListener("click", e => {
     e.preventDefault();
-    dom.profileDropdown.classList.remove("open");
+    if (dom.profileDropdown) dom.profileDropdown.classList.remove("open");
     switchSPATab("orders");
   });
 }
@@ -1094,7 +1219,7 @@ const menuBtnOpenMap = document.getElementById("menu-btn-open-map");
 if (menuBtnOpenMap) {
   menuBtnOpenMap.addEventListener("click", e => {
     e.preventDefault();
-    dom.profileDropdown.classList.remove("open");
+    if (dom.profileDropdown) dom.profileDropdown.classList.remove("open");
     switchSPATab("map");
   });
 }
@@ -1107,13 +1232,14 @@ function checkAuthAndRenderOrders() {
   const authUserBar = document.getElementById("auth-user-bar");
 
   if (!currentAuthToken || !currentAuthUser) {
-    if (authGateBox) authGateBox.style.display = "block";
+    if (authGateBox) authGateBox.style.display = "flex";
     if (protectedContent) protectedContent.style.display = "none";
     if (authUserBar) {
       authUserBar.innerHTML = `
-        <button type="button" class="btn-primary-map btn-sm" id="btn-open-login-from-bar">Login Akun</button>
+        <button type="button" class="btn-primary-map btn-sm" id="btn-open-login-from-bar">Masuk ke Akun</button>
       `;
-      document.getElementById("btn-open-login-from-bar").addEventListener("click", openLoginModal);
+      const btnBar = document.getElementById("btn-open-login-from-bar");
+      if (btnBar) btnBar.addEventListener("click", openLoginModal);
     }
   } else {
     if (authGateBox) authGateBox.style.display = "none";
@@ -1122,10 +1248,11 @@ function checkAuthAndRenderOrders() {
       authUserBar.innerHTML = `
         <div class="auth-user-tag">
           <strong>${currentAuthUser.name}</strong> (${currentAuthUser.role.toUpperCase()})
-          <button type="button" class="btn-ctrl btn-sm" id="btn-logout-sanctum" style="padding: 2px 8px; font-size: 0.75rem;">Logout</button>
+          <button type="button" class="btn-ctrl btn-sm" id="btn-logout-sanctum" style="padding: 2px 8px; font-size: 0.75rem;">Keluar</button>
         </div>
       `;
-      document.getElementById("btn-logout-sanctum").addEventListener("click", logoutSanctum);
+      const btnLogout = document.getElementById("btn-logout-sanctum");
+      if (btnLogout) btnLogout.addEventListener("click", logoutSanctum);
     }
 
     loadAPIRoutes();
@@ -1133,18 +1260,6 @@ function checkAuthAndRenderOrders() {
   }
 }
 
-// Quick login buttons (both in in-page form and modal)
-document.querySelectorAll(".quick-login-pills .pill-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const email = btn.getAttribute("data-email");
-    const p1 = document.getElementById("login-email");
-    const p2 = document.getElementById("modal-login-email");
-    if (p1) p1.value = email;
-    if (p2) p2.value = email;
-  });
-});
-
-// Universal Login Submit Handler
 async function performLogin(email, password, errorElement) {
   if (errorElement) errorElement.style.display = "none";
   try {
@@ -1169,20 +1284,18 @@ async function performLogin(email, password, errorElement) {
   }
 }
 
-// In-Page Form Login
-const formLogin = document.getElementById("form-login");
-if (formLogin) {
-  formLogin.addEventListener("submit", e => {
-    e.preventDefault();
-    performLogin(
-      document.getElementById("login-email").value,
-      document.getElementById("login-pass").value,
-      document.getElementById("login-error-msg")
-    );
-  });
-}
+document.querySelectorAll(".quick-role-instant, .modal-pill").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const email = btn.getAttribute("data-email");
+    const mEmail = document.getElementById("modal-login-email");
+    const mPass = document.getElementById("modal-login-pass");
+    if (mEmail) mEmail.value = email;
+    if (mPass) mPass.value = "password123";
 
-// Modal Form Login
+    performLogin(email, "password123", document.getElementById("modal-login-error-msg"));
+  });
+});
+
 const formLoginModal = document.getElementById("form-login-modal");
 if (formLoginModal) {
   formLoginModal.addEventListener("submit", e => {
@@ -1195,12 +1308,11 @@ if (formLoginModal) {
   });
 }
 
-// Logout Sanctum
 async function logoutSanctum() {
   try {
     await apiRequest("/auth/logout", { method: "POST" });
   } catch (e) {
-    // ignore
+    
   }
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
@@ -1210,14 +1322,13 @@ async function logoutSanctum() {
   checkAuthAndRenderOrders();
 }
 
-// Load Routes for Order Selection & Map Integration
 let cachedApiRoutes = [];
 async function loadAPIRoutes() {
   try {
     const res = await apiRequest("/routes", { method: "GET" });
     cachedApiRoutes = res.data || [];
     
-    // 1. Populate Modul B Order Creation Form
+    
     const orderSelect = document.getElementById("order-route-select");
     if (orderSelect) {
       orderSelect.innerHTML = '<option value="">-- Pilih Rute --</option>';
@@ -1233,7 +1344,7 @@ async function loadAPIRoutes() {
       }
     }
 
-    // 2. Populate Modul A Map Route Linker
+    
     const mapRouteSelect = document.getElementById("map-api-route-select");
     if (mapRouteSelect) {
       mapRouteSelect.innerHTML = '<option value="">-- Mode Graf Bebas (Custom) --</option>';
@@ -1249,7 +1360,6 @@ async function loadAPIRoutes() {
   }
 }
 
-// Map Route Linker Event: Saat memilih rute dari backend di Peta Modul A
 const mapApiRouteSelect = document.getElementById("map-api-route-select");
 if (mapApiRouteSelect) {
   mapApiRouteSelect.addEventListener("change", () => {
@@ -1261,7 +1371,7 @@ if (mapApiRouteSelect) {
 
     showToast(`Memuat koridor rute ${route.route_code} ke peta...`);
 
-    // Pastikan titik origin dan destination ada pada peta
+    
     let startNode = mapGraph.nodes.find(n => n.name.includes("A") || n.id === "A");
     let endNode = mapGraph.nodes.find(n => n.name.includes("F") || n.id === "F");
 
@@ -1273,7 +1383,6 @@ if (mapApiRouteSelect) {
   });
 }
 
-// Reactive Calculation: Base Price, Weight Cost, Total Cost, Monthly Installment
 function recalculateOrderCosts() {
   const routeSelect = document.getElementById("order-route-select");
   const weightInput = document.getElementById("order-weight");
@@ -1290,7 +1399,7 @@ function recalculateOrderCosts() {
   const weightCost = weight * 12500;
   const subtotal = basePrice + weightCost;
 
-  // Bunga 2.5% per bulan jika memilih tenor cicilan > 1 bulan
+  
   const interest = tenure > 1 ? subtotal * 0.025 * tenure : 0;
   const grandTotal = subtotal + interest;
   const monthlyInstallment = Math.round(grandTotal / tenure);
@@ -1305,7 +1414,6 @@ document.getElementById("order-route-select").addEventListener("change", recalcu
 document.getElementById("order-weight").addEventListener("input", recalculateOrderCosts);
 document.getElementById("order-tenure").addEventListener("change", recalculateOrderCosts);
 
-// Create Order Form Submit
 document.getElementById("form-create-order").addEventListener("submit", async e => {
   e.preventDefault();
   const routeId = document.getElementById("order-route-select").value;
@@ -1339,7 +1447,6 @@ document.getElementById("form-create-order").addEventListener("submit", async e 
   }
 });
 
-// Natural Bridge: Track Order from Modul B to Modul A Map
 let currentlyTrackedOrder = null;
 let simulationInterval = null;
 
@@ -1347,10 +1454,10 @@ function trackOrderOnMap(orderJsonStr) {
   const order = JSON.parse(decodeURIComponent(orderJsonStr));
   currentlyTrackedOrder = order;
 
-  // 1. Pindah tab ke Peta secara mulus
+  
   switchSPATab("map");
 
-  // 2. Tampilkan Card Tracker di Peta
+  
   const trackerCard = document.getElementById("map-order-tracker-card");
   if (trackerCard) {
     trackerCard.style.display = "block";
@@ -1360,7 +1467,7 @@ function trackOrderOnMap(orderJsonStr) {
     document.getElementById("track-order-cost").textContent = `Rp ${parseFloat(order.total_cost).toLocaleString("id-ID")}`;
   }
 
-  // 3. Otomatis jalankan algoritma Dijkstra di Peta untuk rute order ini
+  
   routeStartSelect.value = "A";
   routeEndSelect.value = "F";
   document.getElementById("btn-find-routes").click();
@@ -1368,7 +1475,6 @@ function trackOrderOnMap(orderJsonStr) {
   showToast(`Melacak Order ${order.order_number} di Peta Navigasi`);
 }
 
-// Clear Tracked Order
 document.getElementById("btn-clear-tracked-order").addEventListener("click", () => {
   currentlyTrackedOrder = null;
   document.getElementById("map-order-tracker-card").style.display = "none";
@@ -1381,14 +1487,13 @@ document.getElementById("btn-clear-tracked-order").addEventListener("click", () 
   showToast("Pelacakan order dinonaktifkan.");
 });
 
-// Simulasi Pergerakan Armada / Driver di Garis Rute SVG
 document.getElementById("btn-simulate-transit").addEventListener("click", () => {
   if (activeHighlightEdges.length === 0) {
     showToast("Belum ada rute aktif di peta untuk disimulasikan.");
     return;
   }
 
-  // Cari urutan koordinat titik rute
+  
   const pathNodes = [];
   const startId = routeStartSelect.value;
   pathNodes.push(mapGraph.nodes.find(n => n.id === startId));
@@ -1401,7 +1506,7 @@ document.getElementById("btn-simulate-transit").addEventListener("click", () => 
 
   if (pathNodes.length < 2) return;
 
-  // Hapus marker kendaraan lama jika ada
+  
   let vehicle = document.getElementById("svg-vehicle-active");
   if (!vehicle) {
     vehicle = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -1436,7 +1541,6 @@ document.getElementById("btn-simulate-transit").addEventListener("click", () => 
   }, 1200);
 });
 
-// Load Orders List
 async function loadAPIOrders() {
   const tbody = document.getElementById("orders-table-body");
   if (!tbody) return;
@@ -1471,7 +1575,7 @@ async function loadAPIOrders() {
       tbody.appendChild(tr);
     });
 
-    // Tambahkan click listener untuk tombol lacak di peta
+    
     document.querySelectorAll(".btn-track-order").forEach(btn => {
       btn.addEventListener("click", () => {
         trackOrderOnMap(btn.getAttribute("data-order"));
@@ -1483,5 +1587,4 @@ async function loadAPIOrders() {
 }
 
 document.getElementById("btn-refresh-orders").addEventListener("click", loadAPIOrders);
-
 

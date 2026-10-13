@@ -796,10 +796,6 @@ body.sidebar-collapsed .main-content {
   }
 }
 
-/* ==========================================================================
-   MODUL A & MODUL B CSS GRID & FLEXBOX LAYOUT (PURE CSS, NO FRAMEWORK)
-   ========================================================================== */
-
 .spa-view {
   display: none;
   animation: fadeIn 0.2s ease-in-out;
@@ -814,7 +810,6 @@ body.sidebar-collapsed .main-content {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Modul A: Map Container & Toolbar --- */
 .map-module-container {
   display: flex;
   flex-direction: column;
@@ -906,7 +901,6 @@ body.sidebar-collapsed .main-content {
   background: rgba(239, 68, 68, 0.25);
 }
 
-/* --- Map Workarea Grid Layout --- */
 .map-workarea-layout {
   display: grid;
   grid-template-columns: 1fr 340px;
@@ -952,7 +946,6 @@ body.sidebar-collapsed .main-content {
   display: block;
 }
 
-/* SVG Elements Styling */
 .map-bg-grid {
   transition: opacity var(--ease);
 }
@@ -1044,7 +1037,6 @@ body.sidebar-collapsed .main-content {
   pointer-events: none;
 }
 
-/* --- Map Sidebar Panel --- */
 .map-sidebar-panel {
   display: flex;
   flex-direction: column;
@@ -1140,7 +1132,6 @@ body.sidebar-collapsed .main-content {
   width: 100%;
 }
 
-/* Results List */
 .results-card {
   flex: 1;
   overflow: hidden;
@@ -1224,7 +1215,6 @@ body.sidebar-collapsed .main-content {
   font-family: monospace;
 }
 
-/* --- Modul B: SPA Orders & Sanctum Auth Styles --- */
 .spa-module-container {
   display: flex;
   flex-direction: column;
@@ -1335,7 +1325,6 @@ body.sidebar-collapsed .main-content {
   gap: 18px;
 }
 
-/* Calculation Reactive Box */
 .calculation-summary-box {
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
@@ -1379,7 +1368,6 @@ body.sidebar-collapsed .main-content {
   color: #3ea6ff;
 }
 
-/* Data Table */
 .table-header-row {
   display: flex;
   justify-content: space-between;
@@ -1434,7 +1422,6 @@ body.sidebar-collapsed .main-content {
   }
 }
 
-/* --- Natural Integration: Order Tracker Card & Transit Simulation --- */
 .order-sync-card {
   border-left: 4px solid #3b82f6;
   background: rgba(59, 130, 246, 0.08);
@@ -1469,13 +1456,11 @@ body.sidebar-collapsed .main-content {
   margin-bottom: 6px;
 }
 
-/* Animated Vehicle Marker on SVG Map */
 .svg-vehicle-marker {
   transition: transform 0.25s linear;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.8));
 }
 
-/* User Menu & Modal Enhancements */
 .profile-auth-status {
   padding: 4px 14px 8px;
 }
@@ -1513,5 +1498,141 @@ body.sidebar-collapsed .main-content {
   border: none;
 }
 
+.btn-signin-yt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid #3ea6ff;
+  color: #3ea6ff;
+  border-radius: 20px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--ease);
+}
 
+.btn-signin-yt:hover {
+  background: rgba(62, 166, 255, 0.15);
+  border-color: #3ea6ff;
+}
+
+.btn-signin-yt svg {
+  width: 20px;
+  height: 20px;
+}
+
+.guest-auth-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 16px;
+  width: 100%;
+}
+
+.guest-auth-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 36px 28px;
+  max-width: 520px;
+  width: 100%;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.guest-auth-icon {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 16px;
+  background: rgba(255, 0, 0, 0.12);
+  color: var(--yt-red);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.guest-auth-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.guest-auth-card h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.guest-auth-card p {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.guest-quick-switch {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.guest-quick-switch small {
+  display: block;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  font-size: 0.8rem;
+}
+
+.pill-group-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.yt-logistics-banner {
+  background: linear-gradient(135deg, rgba(255, 0, 0, 0.1), rgba(59, 130, 246, 0.12));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 18px 24px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.banner-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  background: var(--yt-red);
+  color: #fff;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.banner-content h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.banner-content p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  max-width: 600px;
+}
+
+.banner-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
 
