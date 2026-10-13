@@ -461,3 +461,759 @@ if (localStorage.getItem("yt-theme") === "light") {
 
 renderChips();
 renderVideos(VIDEOS);
+
+/* ==========================================================================
+   INTEGRASI MODUL A & MODUL B (ES6+ VANILLA JAVASCRIPT & DOM MANIPULATION)
+   ========================================================================== */
+
+// --- SPA Tab Switcher (Beranda, Peta & Pathfinding, Dispatch Orders) ---
+function switchSPATab(targetTab) {
+  document.querySelectorAll(".nav-link").forEach(link => {
+    link.classList.toggle("active", link.getAttribute("data-tab") === targetTab);
+  });
+
+  document.querySelectorAll(".spa-view").forEach(view => {
+    view.classList.remove("active");
+  });
+
+  const targetView = document.getElementById(`view-${targetTab}`);
+  if (targetView) {
+    targetView.classList.add("active");
+    if (targetTab === "map") {
+      renderMapSVG();
+    } else if (targetTab === "orders") {
+      checkAuthAndRenderOrders();
+    }
+  }
+}
+
+document.querySelectorAll(".nav-link[data-tab]").forEach(link => {
+  link.addEventListener("click", e => {
+    e.preventDefault();
+    const tab = link.getAttribute("data-tab");
+    switchSPATab(tab);
+    closeMobileSidebar();
+  });
+});
+
+/* ==========================================================================
+   MODUL A: DYNAMIC SVG MAP, GEOMETRY, PAN/ZOOM & DIJKSTRA PATHFINDING
+   ========================================================================== */
+
+const MAP_STORAGE_KEY = "yt_lks_map_graph_data";
+
+// Initial preset nodes & edges
+const DEFAULT_MAP_DATA = {
+  nodes: [
+    { id: "A", name: "Hub Jakarta (A)", x: 220, y: 160 },
+    { id: "B", name: "Depok Hub (B)", x: 280, y: 340 },
+    { id: "C", name: "Bekasi Logistics (C)", x: 500, y: 190 },
+    { id: "D", name: "Bogor Point (D)", x: 340, y: 520 },
+    { id: "E", name: "Cikarang Dry Port (E)", x: 680, y: 260 },
+    { id: "F", name: "Bandung Distribution (F)", x: 860, y: 480 }
+  ],
+  edges: [
+    { from: "A", to: "B", distanceKm: 35, durationMin: 45, costRp: 45000 },
+    { from: "A", to: "C", distanceKm: 28, durationMin: 35, costRp: 40000 },
+    { from: "B", to: "D", distanceKm: 42, durationMin: 55, costRp: 55000 },
+    { from: "B", to: "C", distanceKm: 32, durationMin: 50, costRp: 42000 },
+    { from: "C", to: "E", distanceKm: 40, durationMin: 40, costRp: 50000 },
+    { from: "D", to: "F", distanceKm: 120, durationMin: 130, costRp: 150000 },
+    { from: "E", to: "F", distanceKm: 95, durationMin: 110, costRp: 130000 },
+    { from: "C", to: "F", distanceKm: 135, durationMin: 150, costRp: 180000 }
+  ]
+};
+
+// Graph State with localStorage persistence
+let mapGraph = JSON.parse(localStorage.getItem(MAP_STORAGE_KEY)) || DEFAULT_MAP_DATA;
+
+function saveMapGraph() {
+  localStorage.setItem(MAP_STORAGE_KEY, JSON.stringify(mapGraph));
+  updateDropdowns();
+}
+
+// Pan & Zoom Transform State
+let mapTransform = {
+  scale: 1.0,
+  x: 0,
+  y: 0,
+  isPanning: false,
+  startX: 0,
+  startY: 0
+};
+
+let selectedNodeForEdge = null;
+let activeHighlightEdges = [];
+
+const mapViewport = document.getElementById("map-viewport");
+const svgTransformGroup = document.getElementById("map-transform-group");
+const svgLayerLines = document.getElementById("svg-layer-lines");
+const svgLayerLabels = document.getElementById("svg-layer-labels");
+const svgLayerNodes = document.getElementById("svg-layer-nodes");
+const zoomLevelLabel = document.getElementById("zoom-level-label");
+const routeStartSelect = document.getElementById("route-start-select");
+const routeEndSelect = document.getElementById("route-end-select");
+const routeSortSelect = document.getElementById("route-sort-select");
+const routeResultsList = document.getElementById("route-results-list");
+const routeCountBadge = document.getElementById("route-count-badge");
+
+function applyMapTransform() {
+  svgTransformGroup.setAttribute(
+    "transform",
+    `matrix(${mapTransform.scale}, 0, 0, ${mapTransform.scale}, ${mapTransform.x}, ${mapTransform.y})`
+  );
+  zoomLevelLabel.textContent = `${Math.round(mapTransform.scale * 100)}%`;
+}
+
+// Pan interactions: mousedown, mousemove, mouseup
+mapViewport.addEventListener("mousedown", e => {
+  // Hanya pan jika klik di area viewport bukan di node
+  if (e.target.closest(".svg-node")) return;
+  mapTransform.isPanning = true;
+  mapTransform.startX = e.clientX - mapTransform.x;
+  mapTransform.startY = e.clientY - mapTransform.y;
+  mapViewport.style.cursor = "grabbing";
+});
+
+window.addEventListener("mousemove", e => {
+  if (!mapTransform.isPanning) return;
+  mapTransform.x = e.clientX - mapTransform.startX;
+  mapTransform.y = e.clientY - mapTransform.startY;
+  applyMapTransform();
+});
+
+window.addEventListener("mouseup", () => {
+  if (mapTransform.isPanning) {
+    mapTransform.isPanning = false;
+    mapViewport.style.cursor = "grab";
+  }
+});
+
+// Zoom interactions: CTRL + Wheel & Buttons
+mapViewport.addEventListener("wheel", e => {
+  if (e.ctrlKey || e.metaKey) {
+    e.preventDefault();
+    const rect = mapViewport.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+    zoomAtPoint(mouseX, mouseY, zoomFactor);
+  }
+}, { passive: false });
+
+function zoomAtPoint(screenX, screenY, factor) {
+  const newScale = Math.min(Math.max(0.4, mapTransform.scale * factor), 3.0);
+  // Fokus zoom mengikuti posisi kursor
+  mapTransform.x = screenX - (screenX - mapTransform.x) * (newScale / mapTransform.scale);
+  mapTransform.y = screenY - (screenY - mapTransform.y) * (newScale / mapTransform.scale);
+  mapTransform.scale = newScale;
+  applyMapTransform();
+}
+
+document.getElementById("btn-zoom-in").addEventListener("click", () => {
+  const rect = mapViewport.getBoundingClientRect();
+  zoomAtPoint(rect.width / 2, rect.height / 2, 1.2);
+});
+
+document.getElementById("btn-zoom-out").addEventListener("click", () => {
+  const rect = mapViewport.getBoundingClientRect();
+  zoomAtPoint(rect.width / 2, rect.height / 2, 0.83);
+});
+
+document.getElementById("btn-reset-zoom").addEventListener("click", () => {
+  mapTransform.scale = 1.0;
+  mapTransform.x = 0;
+  mapTransform.y = 0;
+  applyMapTransform();
+});
+
+// Shortcut Keydown (+/- zoom dan Escape)
+mapViewport.addEventListener("keydown", e => {
+  const rect = mapViewport.getBoundingClientRect();
+  if (e.key === "+" || e.key === "=") {
+    zoomAtPoint(rect.width / 2, rect.height / 2, 1.15);
+  } else if (e.key === "-") {
+    zoomAtPoint(rect.width / 2, rect.height / 2, 0.85);
+  }
+});
+
+// Double click to add new Pinpoint (circle)
+mapViewport.addEventListener("dblclick", e => {
+  const rect = mapViewport.getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const clickY = e.clientY - rect.top;
+
+  // Transform dari viewport screen ke koordinat SVG
+  const svgX = Math.round((clickX - mapTransform.x) / mapTransform.scale);
+  const svgY = Math.round((clickY - mapTransform.y) / mapTransform.scale);
+
+  // Buat ID baru
+  const charCode = 65 + mapGraph.nodes.length;
+  const nextId = charCode <= 90 ? String.fromCharCode(charCode) : `N${mapGraph.nodes.length + 1}`;
+  const nodeName = `Titik Hub ${nextId}`;
+
+  mapGraph.nodes.push({ id: nextId, name: nodeName, x: svgX, y: svgY });
+  saveMapGraph();
+  renderMapSVG();
+  showToast(`Pinpoint ${nextId} ditambahkan di (${svgX}, ${svgY})`);
+});
+
+// Render SVG Map Elements
+function renderMapSVG() {
+  if (!svgLayerLines || !svgLayerNodes || !svgLayerLabels) return;
+
+  svgLayerLines.innerHTML = "";
+  svgLayerLabels.innerHTML = "";
+  svgLayerNodes.innerHTML = "";
+
+  // 1. Draw Edges (<line> and midpoint badges)
+  mapGraph.edges.forEach(edge => {
+    const fromNode = mapGraph.nodes.find(n => n.id === edge.from);
+    const toNode = mapGraph.nodes.find(n => n.id === edge.to);
+    if (!fromNode || !toNode) return;
+
+    const isActive = activeHighlightEdges.some(
+      ae => (ae.from === edge.from && ae.to === edge.to) || (ae.from === edge.to && ae.to === edge.from)
+    );
+
+    // Visible connecting line
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", fromNode.x);
+    line.setAttribute("y1", fromNode.y);
+    line.setAttribute("x2", toNode.x);
+    line.setAttribute("y2", toNode.y);
+    line.setAttribute("class", `svg-edge-line ${isActive ? "active-route" : ""}`);
+    svgLayerLines.appendChild(line);
+
+    // Geometry Calculation: Midpoint (X, Y)
+    const midX = (fromNode.x + toNode.x) / 2;
+    const midY = (fromNode.y + toNode.y) / 2;
+
+    // Midpoint Text & Badge (Jarak & Biaya)
+    const gBadge = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    gBadge.setAttribute("class", "svg-midpoint-badge");
+    gBadge.setAttribute("transform", `translate(${midX}, ${midY})`);
+
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.setAttribute("x", "-46");
+    rect.setAttribute("y", "-11");
+    rect.setAttribute("width", "92");
+    rect.setAttribute("height", "22");
+    gBadge.appendChild(rect);
+
+    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    text.setAttribute("class", "svg-midpoint-text");
+    text.textContent = `${edge.distanceKm}km | Rp${(edge.costRp / 1000).toFixed(0)}k`;
+    gBadge.appendChild(text);
+
+    svgLayerLabels.appendChild(gBadge);
+  });
+
+  // 2. Draw Nodes (<circle> pinpoint & text)
+  mapGraph.nodes.forEach(node => {
+    const isSelected = selectedNodeForEdge && selectedNodeForEdge.id === node.id;
+    const gNode = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    gNode.setAttribute("class", `svg-node ${isSelected ? "selected" : ""}`);
+    gNode.setAttribute("transform", `translate(${node.x}, ${node.y})`);
+    gNode.setAttribute("data-id", node.id);
+
+    // Circle Marker
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("r", isSelected ? "15" : "12");
+    circle.setAttribute("fill", isSelected ? "#ffd700" : "var(--yt-red)");
+    gNode.appendChild(circle);
+
+    // ID Text inside circle
+    const textNode = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    textNode.setAttribute("class", "svg-node-text");
+    textNode.textContent = node.id;
+    gNode.appendChild(textNode);
+
+    // Sub-label name under node
+    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    label.setAttribute("class", "svg-node-label");
+    label.setAttribute("y", "24");
+    label.textContent = node.name;
+    gNode.appendChild(label);
+
+    // Click handler on Node: Create edge between 2 nodes
+    gNode.addEventListener("click", e => {
+      e.stopPropagation();
+      handleNodeSelection(node);
+    });
+
+    svgLayerNodes.appendChild(gNode);
+  });
+
+  updateDropdowns();
+}
+
+function handleNodeSelection(node) {
+  if (!selectedNodeForEdge) {
+    selectedNodeForEdge = node;
+    showToast(`Titik ${node.id} dipilih. Klik titik lain untuk menghubungkan garis koneksi.`);
+    renderMapSVG();
+  } else if (selectedNodeForEdge.id === node.id) {
+    selectedNodeForEdge = null;
+    showToast("Pemilihan titik dibatalkan.");
+    renderMapSVG();
+  } else {
+    // Hubungkan node 1 dan node 2
+    const n1 = selectedNodeForEdge;
+    const n2 = node;
+    selectedNodeForEdge = null;
+
+    // Cek apakah edge sudah ada
+    const exists = mapGraph.edges.some(
+      e => (e.from === n1.id && e.to === n2.id) || (e.from === n2.id && e.to === n1.id)
+    );
+
+    if (exists) {
+      showToast(`Jalur antara ${n1.id} dan ${n2.id} sudah ada.`);
+    } else {
+      // Hitung jarak Euclidean
+      const dx = n2.x - n1.x;
+      const dy = n2.y - n1.y;
+      const distPx = Math.sqrt(dx * dx + dy * dy);
+      const distKm = Math.round(distPx * 0.25);
+      const durationMin = Math.round(distKm * 1.2);
+      const costRp = Math.round(distKm * 1200 + 15000);
+
+      mapGraph.edges.push({
+        from: n1.id,
+        to: n2.id,
+        distanceKm: distKm,
+        durationMin: durationMin,
+        costRp: costRp
+      });
+      saveMapGraph();
+      showToast(`Garis koneksi terhubung: ${n1.id} ⇄ ${n2.id} (${distKm} km, Rp ${costRp.toLocaleString()})`);
+    }
+    renderMapSVG();
+  }
+}
+
+// Clear map and Reset to Defaults
+document.getElementById("btn-clear-map").addEventListener("click", () => {
+  if (confirm("Reset semua titik dan garis peta ke setelan awal?")) {
+    mapGraph = JSON.parse(JSON.stringify(DEFAULT_MAP_DATA));
+    saveMapGraph();
+    activeHighlightEdges = [];
+    selectedNodeForEdge = null;
+    renderMapSVG();
+    showToast("Peta berhasil direset ke setelan awal.");
+  }
+});
+
+document.getElementById("btn-sample-data").addEventListener("click", () => {
+  mapGraph = JSON.parse(JSON.stringify(DEFAULT_MAP_DATA));
+  saveMapGraph();
+  activeHighlightEdges = [];
+  renderMapSVG();
+  showToast("Preset peta LKS berhasil dimuat!");
+});
+
+// Update Select Dropdowns
+function updateDropdowns() {
+  const currentStart = routeStartSelect.value;
+  const currentEnd = routeEndSelect.value;
+
+  routeStartSelect.innerHTML = '<option value="">-- Pilih Titik Awal --</option>';
+  routeEndSelect.innerHTML = '<option value="">-- Pilih Titik Tujuan --</option>';
+
+  mapGraph.nodes.forEach(node => {
+    const opt1 = document.createElement("option");
+    opt1.value = node.id;
+    opt1.textContent = `${node.id} — ${node.name}`;
+    routeStartSelect.appendChild(opt1);
+
+    const opt2 = document.createElement("option");
+    opt2.value = node.id;
+    opt2.textContent = `${node.id} — ${node.name}`;
+    routeEndSelect.appendChild(opt2);
+  });
+
+  if (currentStart) routeStartSelect.value = currentStart;
+  if (currentEnd) routeEndSelect.value = currentEnd;
+}
+
+// ==========================================================================
+// ALGORITMA GRAPH: DIJKSTRA / K-SHORTEST PATHS & SORTING
+// ==========================================================================
+
+function findAllPaths(startId, endId, maxPaths = 10) {
+  const adj = {};
+  mapGraph.nodes.forEach(n => (adj[n.id] = []));
+  mapGraph.edges.forEach(e => {
+    adj[e.from].push({ to: e.to, edge: e });
+    adj[e.to].push({ to: e.from, edge: e });
+  });
+
+  const paths = [];
+
+  function dfs(curr, visited, currentPath, totalDist, totalDuration, totalCost) {
+    if (paths.length >= 25) return;
+    if (curr === endId) {
+      paths.push({
+        nodeIds: [...currentPath],
+        distanceKm: totalDist,
+        durationMin: totalDuration,
+        costRp: totalCost
+      });
+      return;
+    }
+
+    visited.add(curr);
+
+    for (const neighbor of adj[curr]) {
+      if (!visited.has(neighbor.to)) {
+        dfs(
+          neighbor.to,
+          visited,
+          [...currentPath, neighbor.to],
+          totalDist + neighbor.edge.distanceKm,
+          totalDuration + neighbor.edge.durationMin,
+          totalCost + neighbor.edge.costRp
+        );
+      }
+    }
+
+    visited.delete(curr);
+  }
+
+  dfs(startId, new Set(), [startId], 0, 0, 0);
+  return paths;
+}
+
+// Find Route Button Handler
+document.getElementById("btn-find-routes").addEventListener("click", () => {
+  const start = routeStartSelect.value;
+  const end = routeEndSelect.value;
+  const sortBy = routeSortSelect.value; // 'duration' or 'cost'
+
+  if (!start || !end) {
+    showToast("Silakan tentukan titik awal dan tujuan.");
+    return;
+  }
+  if (start === end) {
+    showToast("Titik awal dan tujuan tidak boleh sama.");
+    return;
+  }
+
+  const allRoutes = findAllPaths(start, end);
+
+  if (allRoutes.length === 0) {
+    routeResultsList.innerHTML = `<div class="empty-route-state">Tidak ada jalur yang menghubungkan titik ${start} dan ${end}.</div>`;
+    routeCountBadge.textContent = "0 Opsi";
+    activeHighlightEdges = [];
+    renderMapSVG();
+    return;
+  }
+
+  // Sorting berdasarkan durasi tercepat atau biaya termurah
+  if (sortBy === "duration") {
+    allRoutes.sort((a, b) => a.durationMin - b.durationMin);
+  } else {
+    allRoutes.sort((a, b) => a.costRp - b.costRp);
+  }
+
+  const top10Routes = allRoutes.slice(0, 10);
+  routeCountBadge.textContent = `${top10Routes.length} Opsi`;
+
+  routeResultsList.innerHTML = "";
+  top10Routes.forEach((route, index) => {
+    const item = document.createElement("div");
+    item.className = `route-item ${index === 0 ? "selected" : ""}`;
+    item.innerHTML = `
+      <div class="route-item-title">
+        <span>Opsi #${index + 1} ${index === 0 ? "(Terbaik)" : ""}</span>
+        <span>Rp ${route.costRp.toLocaleString("id-ID")}</span>
+      </div>
+      <div class="route-item-path">Jalur: ${route.nodeIds.join(" ➔ ")}</div>
+      <div class="route-item-metrics">
+        <span>⏱️ ${route.durationMin} mnt</span>
+        <span>🛣️ ${route.distanceKm} km</span>
+      </div>
+    `;
+
+    item.addEventListener("click", () => {
+      document.querySelectorAll(".route-item").forEach(el => el.classList.remove("selected"));
+      item.classList.add("selected");
+      highlightRoute(route);
+    });
+
+    routeResultsList.appendChild(item);
+  });
+
+  // Default highlight rute terbaik (opsi #1)
+  highlightRoute(top10Routes[0]);
+  showToast(`Ditemukan ${top10Routes.length} alternatif rute terpendek/termurah.`);
+});
+
+function highlightRoute(route) {
+  activeHighlightEdges = [];
+  for (let i = 0; i < route.nodeIds.length - 1; i++) {
+    activeHighlightEdges.push({
+      from: route.nodeIds[i],
+      to: route.nodeIds[i + 1]
+    });
+  }
+  renderMapSVG();
+}
+
+/* ==========================================================================
+   MODUL B: FRONTEND SPA & LARAVEL SANCTUM RESTful API CLIENT
+   ========================================================================== */
+
+const API_BASE_URL = window.location.origin.includes("localhost") || window.location.origin.includes("127.0.0.1")
+  ? "/XX_SERVER_MODULE/BACKEND/public/index.php/api/v1"
+  : "/api/v1";
+
+const AUTH_TOKEN_KEY = "yt_sanctum_token";
+const AUTH_USER_KEY = "yt_sanctum_user";
+
+let currentAuthToken = localStorage.getItem(AUTH_TOKEN_KEY);
+let currentAuthUser = JSON.parse(localStorage.getItem(AUTH_USER_KEY));
+
+// Axios-style Fetch Wrapper with Bearer Token Authorization
+async function apiRequest(endpoint, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    ...(options.headers || {})
+  };
+
+  if (currentAuthToken) {
+    headers["Authorization"] = `Bearer ${currentAuthToken}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (response.status === 401) {
+    // Unauthorized token expired
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
+    currentAuthToken = null;
+    currentAuthUser = null;
+    checkAuthAndRenderOrders();
+    throw new Error(data.message || "Sesi berakhir. Silakan login kembali.");
+  }
+
+  if (!response.ok) {
+    const error = new Error(data.message || `HTTP Error ${response.status}`);
+    error.status = response.status;
+    error.errors = data.errors || {};
+    throw error;
+  }
+
+  return data;
+}
+
+function checkAuthAndRenderOrders() {
+  const authGateBox = document.getElementById("auth-gate-box");
+  const protectedContent = document.getElementById("protected-spa-content");
+  const authUserBar = document.getElementById("auth-user-bar");
+
+  if (!currentAuthToken || !currentAuthUser) {
+    authGateBox.style.display = "block";
+    protectedContent.style.display = "none";
+    authUserBar.innerHTML = `<span class="badge badge-neutral">Belum Login</span>`;
+  } else {
+    authGateBox.style.display = "none";
+    protectedContent.style.display = "grid";
+    authUserBar.innerHTML = `
+      <div class="auth-user-tag">
+        <strong>${currentAuthUser.name}</strong> (${currentAuthUser.role})
+        <button type="button" class="btn-ctrl btn-sm" id="btn-logout-sanctum" style="padding: 2px 8px; font-size: 0.75rem;">Logout</button>
+      </div>
+    `;
+
+    document.getElementById("btn-logout-sanctum").addEventListener("click", logoutSanctum);
+
+    loadAPIRoutes();
+    loadAPIOrders();
+  }
+}
+
+// Quick login buttons
+document.querySelectorAll(".quick-login-pills .pill-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.getElementById("login-email").value = btn.getAttribute("data-email");
+    document.getElementById("login-pass").value = "password123";
+  });
+});
+
+// Form Login Submit
+document.getElementById("form-login").addEventListener("submit", async e => {
+  e.preventDefault();
+  const email = document.getElementById("login-email").value;
+  const password = document.getElementById("login-pass").value;
+  const errorMsg = document.getElementById("login-error-msg");
+  errorMsg.style.display = "none";
+
+  try {
+    const res = await apiRequest("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+
+    currentAuthToken = res.access_token;
+    currentAuthUser = res.user;
+    localStorage.setItem(AUTH_TOKEN_KEY, currentAuthToken);
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(currentAuthUser));
+
+    showToast(`Selamat datang, ${res.user.name}!`);
+    checkAuthAndRenderOrders();
+  } catch (err) {
+    errorMsg.textContent = err.message || "Gagal masuk ke sistem.";
+    errorMsg.style.display = "block";
+  }
+});
+
+// Logout Sanctum
+async function logoutSanctum() {
+  try {
+    await apiRequest("/auth/logout", { method: "POST" });
+  } catch (e) {
+    // ignore
+  }
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_USER_KEY);
+  currentAuthToken = null;
+  currentAuthUser = null;
+  showToast("Anda telah logout.");
+  checkAuthAndRenderOrders();
+}
+
+// Load Routes for Order Selection
+let cachedApiRoutes = [];
+async function loadAPIRoutes() {
+  try {
+    const res = await apiRequest("/routes", { method: "GET" });
+    cachedApiRoutes = res.data || [];
+    const select = document.getElementById("order-route-select");
+    select.innerHTML = '<option value="">-- Pilih Rute --</option>';
+
+    cachedApiRoutes.forEach(r => {
+      const opt = document.createElement("option");
+      opt.value = r.id;
+      opt.textContent = `${r.route_code}: ${r.origin_name} ➔ ${r.destination_name} (${r.distance_km} km)`;
+      select.appendChild(opt);
+    });
+
+    if (cachedApiRoutes.length > 0) {
+      select.value = cachedApiRoutes[0].id;
+      recalculateOrderCosts();
+    }
+  } catch (err) {
+    console.error("Gagal memuat rute:", err);
+  }
+}
+
+// Reactive Calculation: Base Price, Weight Cost, Total Cost, Monthly Installment
+function recalculateOrderCosts() {
+  const routeSelect = document.getElementById("order-route-select");
+  const weightInput = document.getElementById("order-weight");
+  const tenureSelect = document.getElementById("order-tenure");
+
+  const routeId = parseInt(routeSelect.value, 10);
+  const weight = parseFloat(weightInput.value) || 0;
+  const tenure = parseInt(tenureSelect.value, 10) || 1;
+
+  const route = cachedApiRoutes.find(r => r.id === routeId);
+  const basePrice = route ? parseFloat(route.base_price) : 0;
+  const weightCost = weight * 12500;
+  const subtotal = basePrice + weightCost;
+
+  // Bunga 2.5% per bulan jika memilih tenor cicilan > 1 bulan
+  const interest = tenure > 1 ? subtotal * 0.025 * tenure : 0;
+  const grandTotal = subtotal + interest;
+  const monthlyInstallment = Math.round(grandTotal / tenure);
+
+  document.getElementById("calc-base-price").textContent = `Rp ${basePrice.toLocaleString("id-ID")}`;
+  document.getElementById("calc-weight-cost").textContent = `Rp ${weightCost.toLocaleString("id-ID")}`;
+  document.getElementById("calc-total-cost").textContent = `Rp ${grandTotal.toLocaleString("id-ID")}`;
+  document.getElementById("calc-installment").textContent = `Rp ${monthlyInstallment.toLocaleString("id-ID")} / bln (${tenure}x)`;
+}
+
+document.getElementById("order-route-select").addEventListener("change", recalculateOrderCosts);
+document.getElementById("order-weight").addEventListener("input", recalculateOrderCosts);
+document.getElementById("order-tenure").addEventListener("change", recalculateOrderCosts);
+
+// Create Order Form Submit
+document.getElementById("form-create-order").addEventListener("submit", async e => {
+  e.preventDefault();
+  const routeId = document.getElementById("order-route-select").value;
+  const pkgType = document.getElementById("order-pkg-type").value;
+  const weight = document.getElementById("order-weight").value;
+  const tenure = document.getElementById("order-tenure").value;
+  const errorMsg = document.getElementById("order-error-msg");
+  errorMsg.style.display = "none";
+
+  try {
+    const res = await apiRequest("/orders", {
+      method: "POST",
+      body: JSON.stringify({
+        route_id: routeId,
+        package_type: pkgType,
+        weight_kg: weight,
+        tenure_months: tenure
+      })
+    });
+
+    showToast(`Order ${res.order.order_number} berhasil dibuat!`);
+    loadAPIOrders();
+  } catch (err) {
+    if (err.errors) {
+      const messages = Object.values(err.errors).flat().join(" ");
+      errorMsg.textContent = messages;
+    } else {
+      errorMsg.textContent = err.message || "Gagal membuat order.";
+    }
+    errorMsg.style.display = "block";
+  }
+});
+
+// Load Orders List
+async function loadAPIOrders() {
+  const tbody = document.getElementById("orders-table-body");
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary);">Memuat data pesanan...</td></tr>';
+
+  try {
+    const res = await apiRequest("/orders", { method: "GET" });
+    const orders = res.data || [];
+
+    if (orders.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary);">Belum ada pesanan dispatch.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = "";
+    orders.forEach(o => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><strong>${o.order_number}</strong></td>
+        <td>${o.origin_name || "-"} ➔ ${o.destination_name || "-"}</td>
+        <td>${o.weight_kg} kg</td>
+        <td><strong>Rp ${parseFloat(o.total_cost).toLocaleString("id-ID")}</strong></td>
+        <td>${o.tenure_months > 1 ? `Rp ${parseFloat(o.monthly_installment).toLocaleString("id-ID")} x ${o.tenure_months}bln` : "Lunas 1x"}</td>
+        <td><span class="badge-status ${o.status}">${o.status}</span></td>
+        <td>
+          <button type="button" class="btn-ctrl btn-sm" onclick="switchSPATab('map'); showToast('Melihat rute order ${o.order_number} di peta');">Peta</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444;">Gagal memuat pesanan: ${err.message}</td></tr>`;
+  }
+}
+
+document.getElementById("btn-refresh-orders").addEventListener("click", loadAPIOrders);
+
